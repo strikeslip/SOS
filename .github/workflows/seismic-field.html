@@ -1,0 +1,202 @@
+<!--
+[SOS - Sounds Of Seismic]
+https://sos.allshookup.org/
+Copyright (c) [02025] [SHOOK aka D.V.R.]
+
+This script; seismic-field.html parses all M6.0+ recorded earthquakes since year 1900
+REF: https://earthquake.usgs.gov/fdsnws/event/1/query?starttime=1900-01-01&minmagnitude=6&format=geojson
+When new M6.0 event or greater occurs this list updates most recent M6.0+ event.
+Map is built using https://leafletjs.com / version 1.9.4
+Source https://github.com/Leaflet/Leaflet
+
+SOS is free software: you can redistribute it and/or modify
+it under the terms of the MIT License (https://opensource.org/license/mit)
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seismic Field</title>
+    <!-- Leaflet CSS from CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin=""/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+        }
+        #header {
+            text-align: center;
+            padding: 20px;
+            background-color: #333;
+            border-bottom: 2px solid #ff4500;
+        }
+        #header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            color: #ff4500;
+        }
+        #header p {
+            margin: 5px 0;
+            font-size: 1.2em;
+            color: #ccc;
+        }
+        #map {
+            height: 80vh;
+            width: 100%;
+        }
+        a {
+            color: #ff4500;
+            text-decoration: underline;
+        }
+        /* Styles for earthquake list and search */
+        #earthquake-list {
+            padding: 20px;
+            background-color: #222;
+            max-width: 800px;
+            margin: 20px auto;
+            border-radius: 5px;
+        }
+        #earthquake-list h2 {
+            color: #ff4500;
+            text-align: center;
+        }
+        #search-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #year-search {
+            padding: 5px;
+            font-size: 1em;
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #ff4500;
+            border-radius: 3px;
+        }
+        #list-content {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .earthquake-item {
+            background: rgba(51, 51, 51, 0.8);
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>Seismic Resonance</h1>
+        <p>Visualizing Earth's Seismic Field</p>
+    </div>
+    <div id="map"></div>
+    <div id="earthquake-list">
+        <h2>M6+ Earthquakes &rarr; 1900</h2>
+        <div id="search-container">
+            <label for="year-search">Search by Year: </label>
+            <input type="number" id="year-search" placeholder="e.g., 2025" min="1900" max="2025">
+        </div>
+        <div id="list-content"></div>
+    </div>
+
+    <!-- Leaflet JS from CDN -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+            crossorigin=""></script>
+    <script>
+        // Initialize the map
+        const map = L.map('map').setView([0, 0], 2); // Centered on the world, zoom level 2
+
+    
+        // Add dark tile layer with plain text attribution
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: 'NOWAR',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+       // Fetch seismic data from USGS API (1900 to Now, magnitude 6+)
+        const url = "https://earthquake.usgs.gov/fdsnws/event/1/query?starttime=1900-01-01&minmagnitude=6&format=geojson";
+        let allEarthquakes = []; // Store all data for filtering
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                // Sort features by time (most recent first)
+                allEarthquakes = data.features.sort((a, b) => b.properties.time - a.properties.time);
+
+                // Process each earthquake event for the map
+                allEarthquakes.forEach(feature => {
+                    const lat = feature.geometry.coordinates[1];
+                    const lon = feature.geometry.coordinates[0];
+                    const mag = feature.properties.mag;
+
+                    let radius = mag * 2;
+                    let color = mag < 5 ? '#ffff00' : mag < 6 ? '#ffa500' : '#ff4500';
+
+                    let popupContent = `
+                        Magnitude: ${mag}<br>
+                        Location: ${feature.properties.place || "Unknown location"}<br>
+                        Time: ${new Date(feature.properties.time).toLocaleString()}<br>
+                    `;
+                    if (feature.properties.url) {
+                        popupContent += `<br><strong><a href="${feature.properties.url}" target="_blank">View Details</a></strong>`;
+                    }
+
+                    L.circleMarker([lat, lon], {
+                        radius: radius,
+                        color: color,
+                        fillColor: color,
+                        fillOpacity: 0.7,
+                        weight: 1
+                    }).addTo(map)
+                      .bindPopup(popupContent);
+                });
+
+                // Initial list population
+                populateList(allEarthquakes);
+
+                // Search functionality
+                const yearSearch = document.getElementById('year-search');
+                yearSearch.addEventListener('input', () => {
+                    const year = yearSearch.value.trim();
+                    const filtered = year ? 
+                        allEarthquakes.filter(feature => 
+                            new Date(feature.properties.time).getFullYear() === parseInt(year)
+                        ) : allEarthquakes;
+                    populateList(filtered);
+                });
+            })
+            .catch(error => console.error('Error fetching seismic data:', error));
+
+        // Function to populate the earthquake list
+        function populateList(features) {
+            const listContent = document.getElementById('list-content');
+            listContent.innerHTML = ''; // Clear existing content
+            features.forEach(feature => {
+                const mag = feature.properties.mag;
+                const place = feature.properties.place || "Unknown location";
+                const time = new Date(feature.properties.time).toLocaleString();
+                const url = feature.properties.url || "";
+
+                const item = document.createElement('div');
+                item.className = 'earthquake-item';
+                item.innerHTML = `
+                    Magnitude: ${mag}<br>
+                    Location: ${place}<br>
+                    Time: ${time}<br>
+                    ${url ? `<strong><a href="${url}" target="_blank">View Details</a></strong>` : 'No details available'}
+                `;
+                listContent.appendChild(item);
+            });
+        }
+    </script>
+</body>
+</html>
