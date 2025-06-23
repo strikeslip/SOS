@@ -1,7 +1,6 @@
 ![Image](https://github.com/user-attachments/assets/88059152-b8fa-46fc-a498-8801064b5cc4)
 
-**Sounds Of Seismic (SOS)**<br>
-https://sos.allshookup.org/
+### Sounds Of Seismic [(SOS)](https://sos.allshookup.org/)<br>
 
 Sounds of Seismic (SOS) transforms MiniSEED seismic waveform data into geophysical sonic experiences. GenAI algorithms and sound synthesis convert real-time USGS and EarthScope data into generative ambient soundscapes. A minimalist, browser-based interface streams seismic truths as electronic instruments. SOS scales dynamic sonifications via LLM pattern analysis, inspiring interdisciplinary collaborations to redefine data-driven music. This platform pioneers real-time geophysical insights through music, delivering scalable, innovative sonic experiences for a global audience.
 
@@ -37,6 +36,10 @@ Working Modules;<br>
 + Interdisciplinary collaborations towards innovative geophysical music creations.<br>
 + Legacy design incorporating Raspberry Shake Network.<br>
 
+[Seismic Field](https://allshookup.org/seismic-field.html) - M6+ Global Earthquakes Since 1900<br>
+[Seismic Auditory Display](https://sos.allshookup.org/auditory-display.html) - Ryan McGee<br>
+[SeismicSounds](https://soundcloud.com/seismicsounds) - SoundCloud<br>
+    
 https://sos.allshookup.org/
 
 
