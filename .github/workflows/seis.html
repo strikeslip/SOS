@@ -1,0 +1,1049 @@
+<!--
+[SOS - Sounds Of Seismic]
+https://sos.allshookup.org/
+Copyright (c) [02025] [SHOOK aka D.V.R.]
+
+SOS is free software: you can redistribute it and/or modify
+it under the terms of the MIT License (https://opensource.org/license/mit)
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <title>SEISTRONICA - Seismic Electronica</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #101015; /* Slightly darker blueish */
+            color: #e0e0e0;
+            text-align: center;
+            padding: 40px 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            font-size: 2.2em;
+            margin-bottom: 15px;
+            color: #ff6f00; /* Orange accent */
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        h2 {
+            font-size: 1.1em;
+            margin-bottom: 25px;
+            color: #999;
+            font-weight: 400;
+        }
+        button {
+            background: #ff6f00; /* Match H1 */
+            border: none;
+            color: #101015;
+            font-size: 18px;
+            font-weight: 600;
+            padding: 12px 28px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 10px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+        }
+        button:hover {
+            background: #ff8f33; /* Lighter orange */
+        }
+        button:active {
+            transform: scale(0.98);
+        }
+        button:disabled {
+            background: #555;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .info {
+            margin-top: 30px;
+            font-size: 0.95em;
+            color: #ccc;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .info strong {
+            color: #ffaa00; /* Highlight color for data points */
+        }
+        .info a {
+            color: #66aaff; /* Link color */
+            text-decoration: none;
+        }
+        .info a:hover {
+            text-decoration: underline;
+        }
+        .error {
+            color: #ff5555;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+        .loading {
+            margin-top: 20px;
+            font-style: italic;
+            color: #888;
+        }
+        .status-line { /* Style for individual lines in status */
+            display: block;
+            margin-bottom: 3px;
+        }
+        .status-line.grain-style {
+            font-style: italic;
+            color: #aaaaff; /* Different color for grain style */
+        }
+
+    </style>
+</head>
+<body>
+    <h1>SEISTRONICA</h1>
+    <h2>Seismic Electronica Muzak</h2>
+    <button id="startButton">Start</button>
+    <button id="stopButton" disabled>Stop</button>
+    <div id="statusInfo">Press Start to fetch seismic data and begin sonification...</div>
+
+    <script>
+        // --- Configuration ---
+        const SEISMIC_DATA_DURATION_S = 60; // How many seconds of seismic data to fetch
+        const SONIFICATION_DURATION_S = 10; // How long to play the *stretched/processed* seismic data (for DRONE)
+        const SAMPLE_RATE = 44100; // Target audio sample rate
+        const MIN_MAGNITUDE = 6.0; // Minimum magnitude earthquake to fetch
+        const FETCH_TIMESPAN_DAYS = 30; // How many days back to look for events
+        const STATION_INFO = { net: "IU", sta: "ANMO", loc: "00", cha: "BHZ" }; // ANMO station
+
+        const BASS_NOTE_INTERVAL_MS = 250; // Base interval for bass sequencer (120 bpm 16ths)
+        const ARP_NOTE_INTERVAL_MS = 150; // Base interval for arpeggiator
+        const BASS_FILTER_BASE_FREQ = 80;
+        const BASS_FILTER_MAX_FREQ = 1000;
+        const ARP_BASE_FREQ = 220; // A3
+
+        // Timbre randomization configuration
+        const TIMBRE_CHANGE_INTERVAL = 21000; // 21 seconds in milliseconds
+        const WAVEFORMS = ['sine', 'square', 'sawtooth', 'triangle'];
+        const FILTER_TYPES = ['lowpass', 'highpass', 'bandpass'];
+
+        // --- Granular Synthesis Configuration ---
+        const GRAIN_STYLES = ['Random', 'Forward', 'Reverse', 'Granular', 'Stutter'];
+        const GRAIN_STYLE_INTERVAL = 8000; // 8 seconds in milliseconds
+        const GRAIN_MIN_INTERVAL_MS = 20;    // Min time between grains (influences density)
+        const GRAIN_MAX_INTERVAL_MS = 150;   // Max time between grains
+        const GRAIN_MIN_DURATION_S = 0.03;   // Min grain duration
+        const GRAIN_MAX_DURATION_S = 0.25;   // Max grain duration
+        const GRAIN_MIN_PITCH_SHIFT = 0.8;   // Min playback rate (0.8 = ~ -3.7 semitones)
+        const GRAIN_MAX_PITCH_SHIFT = 1.2;   // Max playback rate (1.2 = ~ +3.1 semitones)
+        const GRAIN_MAX_GAIN = 0.15;         // Max volume per grain (keep low to avoid clipping)
+        const GRAIN_ATTACK_S = 0.01;         // Short attack time
+        const GRAIN_DECAY_S = 0.1;           // Decay time (can overlap)
+        const GRANULAR_ENERGY_THRESHOLD = 0.3; // Normalized envelope threshold for 'Granular' style
+        const STUTTER_REPEAT_COUNT = 3;      // How many times a small segment repeats in 'Stutter'
+        const STUTTER_SEGMENT_LENGTH_S = 0.05; // Duration of the segment to stutter
+
+        // --- Global State ---
+        let audioCtx = null;
+        let masterGain;
+        let reverb;
+        let reverbWetGain;
+        let delay;
+        let delayFeedbackGain;
+        let delayWetGain;
+
+        let seismicBuffer = null; // Raw seismic data buffer (Float32Array - original duration)
+        let seismicAmplitudeEnvelope = null; // Extracted envelope (from original duration)
+
+        let isPlaying = false;
+        let currentQuakeInfo = null;
+        let baseStatusHTML = ""; // To store the main quake info html
+        let scheduledEvents = []; // Store timeouts/audio nodes for stopping (MAIN + TIMBRE)
+        let timbreIntervalId = null;
+
+        // Current timbre settings
+        let currentDroneWaveform = 'sine';
+        let currentBassWaveform = 'sawtooth';
+        let currentArpWaveform = 'triangle';
+        let currentFilterType = 'lowpass';
+
+        // --- Granular Synthesis State ---
+        let seismicAudioBuffer = null;    // Web Audio API AudioBuffer of seismic data
+        let grainEngineMasterGain = null; // Gain node for overall granular level
+        let grainStyleIntervalId = null;  // Timer for cycling grain styles
+        let grainSchedulerIds = [];       // Holds setTimeout IDs for individual grain scheduling
+        let currentGrainStyle = 'Random'; // Start with Random
+        let grainPlaybackPosition = 0;    // Tracker for Forward/Reverse styles (in seconds)
+        let highEnergyRegions = [];       // Array of {startSample, endSample} for 'Granular' style
+        let stutterInfo = {            // State for 'Stutter' style
+            repeatsLeft: 0,
+            basePosition: 0,
+            segmentDuration: STUTTER_SEGMENT_LENGTH_S
+        };
+
+        // DOM Elements
+        const startBtn = document.getElementById("startButton");
+        const stopBtn = document.getElementById("stopButton");
+        const statusInfo = document.getElementById("statusInfo");
+
+        // Helper function to get random element from array
+        function getRandom(arr) {
+            if (!arr || arr.length === 0) return null;
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        // Function to apply random timbre changes to SYNTHS and EFFECTS
+        function applyRandomTimbre() {
+            if (!audioCtx || !isPlaying) return;
+            console.log("🔄 Applying new synth/effect timbre...");
+
+            currentDroneWaveform = getRandom(WAVEFORMS);
+            currentBassWaveform = getRandom(WAVEFORMS);
+            currentArpWaveform = getRandom(WAVEFORMS);
+            currentFilterType = getRandom(FILTER_TYPES);
+
+            const depthFactor = currentQuakeInfo ? Math.min(1, currentQuakeInfo.depth / 600) : 0.5; // Normalize depth 0-1
+            const reverbLevel = 0.15 + Math.random() * 0.3 + depthFactor * 0.35; // Slightly less reverb overall, more depth influence
+            const delayTime = 0.1 + Math.random() * 0.4 + depthFactor * 0.3;
+            const delayFeedback = 0.2 + Math.random() * 0.3 + depthFactor * 0.2;
+
+            if (reverbWetGain && reverbWetGain.gain) {
+                reverbWetGain.gain.setTargetAtTime(reverbLevel, audioCtx.currentTime, 0.2);
+            }
+            if (delay && delay.delayTime) {
+                delay.delayTime.setTargetAtTime(delayTime, audioCtx.currentTime, 0.2);
+            }
+             if (delayFeedbackGain && delayFeedbackGain.gain) {
+                delayFeedbackGain.gain.setTargetAtTime(delayFeedback, audioCtx.currentTime, 0.2);
+            }
+
+            console.log(`New Synth Timbre: Drone=${currentDroneWaveform}, Bass=${currentBassWaveform}, Arp=${currentArpWaveform}, Filter=${currentFilterType}`);
+            // Update status implicitly via cycleGrainStyle or dedicated update function if needed
+            updateStatusDisplay(); // Refresh display including synth info potentially
+        }
+
+        // Start synth/effect timbre scheduler
+        function startTimbreScheduler() {
+            stopTimbreScheduler(); // Ensure no duplicates
+            timbreIntervalId = setInterval(applyRandomTimbre, TIMBRE_CHANGE_INTERVAL);
+            console.log(`⏱️ Synth/Effect Timbre scheduler started (every ${TIMBRE_CHANGE_INTERVAL/1000} seconds)`);
+        }
+
+        // Stop synth/effect timbre scheduler
+        function stopTimbreScheduler() {
+            if (timbreIntervalId) {
+                clearInterval(timbreIntervalId);
+                timbreIntervalId = null;
+                console.log("🛑 Synth/Effect Timbre scheduler stopped");
+            }
+        }
+
+        // --- Audio Utilities ---
+        function parseMiniSEED(buffer) { /* ... (same as before) ... */
+            try {
+                const view = new DataView(buffer);
+                if (buffer.byteLength < 64 ) throw new Error("Buffer too small for MiniSEED header.");
+                const numSamples = view.getInt16(46, false);
+                const dataOffset = 64;
+                if (numSamples <= 0 || buffer.byteLength < dataOffset + numSamples * 4) {
+                    throw new Error(`Invalid sample count (${numSamples}) or buffer size.`);
+                }
+                const rawData = new Int32Array(buffer.slice(dataOffset, dataOffset + numSamples * 4));
+                return normalize(rawData);
+            } catch (error) {
+                console.error("MiniSEED Parsing Error:", error);
+                updateStatus(`Error parsing seismic data: ${error.message}. Using dummy noise instead.`, true);
+                const fallbackSamples = 512;
+                const fallbackData = new Float32Array(fallbackSamples);
+                for (let i = 0; i < fallbackSamples; i++) {
+                    fallbackData[i] = Math.random() * 2 - 1;
+                }
+                return fallbackData;
+            }
+        }
+        function normalize(data) { /* ... (same as before) ... */
+            const maxVal = data.reduce((max, val) => Math.max(max, Math.abs(val)), 0);
+            if (maxVal === 0) return new Float32Array(data.length);
+            const factor = 1.0 / maxVal;
+            const normalized = new Float32Array(data.length);
+            for (let i = 0; i < data.length; i++) {
+                normalized[i] = data[i] * factor;
+            }
+            return normalized;
+         }
+        function resampleLinear(input, newLength) { /* ... (same as before) ... */
+            const output = new Float32Array(newLength);
+            if (input.length <= 1) {
+                for(let i = 0; i < newLength; i++) output[i] = input.length === 1 ? input[0] : 0;
+                return output;
+            }
+            const factor = (input.length - 1) / Math.max(1, newLength - 1); // Avoid div by zero if newLength is 1
+            for (let i = 0; i < newLength; i++) {
+                const index = i * factor;
+                const i0 = Math.floor(index);
+                const i1 = Math.min(i0 + 1, input.length - 1);
+                const fraction = index - i0;
+                // Ensure indices are valid before accessing input array
+                 if (i0 >= 0 && i0 < input.length && i1 >= 0 && i1 < input.length) {
+                    output[i] = input[i0] + (input[i1] - input[i0]) * fraction;
+                 } else {
+                    // Handle potential out-of-bounds, e.g., clamp or zero fill
+                    output[i] = input[Math.max(0, Math.min(input.length - 1, i0))] || 0; // Clamp index
+                 }
+            }
+            return output;
+         }
+        function extractEnvelope(buffer, windowSizeSamples) { /* ... (same as before) ... */
+            if (!buffer || buffer.length === 0) return new Float32Array(0);
+            const numWindows = Math.max(1, Math.ceil(buffer.length / windowSizeSamples));
+            const envelope = new Float32Array(numWindows);
+            for (let i = 0; i < envelope.length; i++) {
+                let sum = 0;
+                let count = 0;
+                const start = i * windowSizeSamples;
+                const end = Math.min(start + windowSizeSamples, buffer.length);
+                for (let j = start; j < end; j++) {
+                    sum += Math.abs(buffer[j]);
+                    count++;
+                }
+                envelope[i] = count > 0 ? sum / count : 0; // Average absolute value
+            }
+            const maxEnv = Math.max(...envelope);
+            if (maxEnv > 0) {
+                for (let i = 0; i < envelope.length; i++) {
+                    envelope[i] /= maxEnv;
+                }
+            }
+            return envelope;
+        }
+
+        // NEW: Helper to convert Float32Array seismic data to AudioBuffer
+        function createAudioBufferFromFloat32Array(float32Array) {
+            if (!audioCtx || !float32Array || float32Array.length === 0) return null;
+            try {
+                const buffer = audioCtx.createBuffer(1, float32Array.length, audioCtx.sampleRate);
+                buffer.copyToChannel(float32Array, 0);
+                return buffer;
+            } catch (error) {
+                 console.error("Error creating AudioBuffer:", error);
+                 updateStatus(`Error creating audio buffer: ${error.message}`, true);
+                 return null;
+            }
+        }
+
+        async function createReverb() { /* ... (same as before) ... */
+            const impulseLength = 2 * audioCtx.sampleRate;
+            const impulseBuffer = audioCtx.createBuffer(2, impulseLength, audioCtx.sampleRate);
+            for (let channel = 0; channel < 2; channel++) {
+                const data = impulseBuffer.getChannelData(channel);
+                for (let i = 0; i < impulseLength; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / impulseLength, 2.5);
+                }
+            }
+            reverb = audioCtx.createConvolver();
+            reverb.buffer = impulseBuffer;
+            reverbWetGain = audioCtx.createGain();
+            reverbWetGain.gain.value = 0.3;
+            reverb.connect(reverbWetGain).connect(masterGain);
+         }
+        function createDelay() { /* ... (same as before) ... */
+            delay = audioCtx.createDelay(2.0);
+            delay.delayTime.value = 0.35;
+            delayFeedbackGain = audioCtx.createGain();
+            delayFeedbackGain.gain.value = 0.4;
+            delayWetGain = audioCtx.createGain();
+            delayWetGain.gain.value = 0.3; // This wet gain wasn't connected before! Let's fix.
+            delay.connect(delayFeedbackGain);
+            delayFeedbackGain.connect(delay);
+            // delay.connect(delayWetGain).connect(masterGain); // Corrected connection
+             // Route the DELAY output, not the original signal, through the wet gain
+             delay.connect(delayWetGain);
+             delayWetGain.connect(masterGain);
+         }
+
+        // --- Data Fetching ---
+        async function fetchLatestEvent() { /* ... (same as before) ... */
+            const end = new Date().toISOString();
+            const start = new Date(Date.now() - FETCH_TIMESPAN_DAYS * 24 * 60 * 60 * 1000).toISOString();
+            const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${start}&endtime=${end}&minmagnitude=${MIN_MAGNITUDE}&orderby=time`;
+
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`USGS Event Fetch failed: ${res.status} ${res.statusText}`);
+                const data = await res.json();
+                if (!data.features || data.features.length == 0) {
+                    throw new Error(`No events found with M >= ${MIN_MAGNITUDE} in the last ${FETCH_TIMESPAN_DAYS} days.`);
+                }
+                const latestEvent = data.features[0];
+                console.log("Fetched event:", latestEvent);
+                return latestEvent;
+            } catch (error) {
+                console.error("Error fetching latest event:", error);
+                updateStatus(`Error fetching earthquake data: ${error.message}`, true);
+                return null;
+            }
+         }
+        async function fetchMiniSEED(eventTime) { /* ... (same as before) ... */
+            const startTimeISO = eventTime;
+            const startTimeMs = new Date(startTimeISO).getTime();
+            // Fetch a bit longer than SEISMIC_DATA_DURATION_S to be safe? No, keep it matched for now.
+            const endTimeMs = startTimeMs + SEISMIC_DATA_DURATION_S * 1000;
+            const endTimeISO = new Date(endTimeMs).toISOString();
+            const { net, sta, loc, cha } = STATION_INFO;
+            const url = `https://service.iris.edu/fdsnws/dataselect/1/query?net=${net}&sta=${sta}&loc=${loc}&cha=${cha}&starttime=${startTimeISO}&endtime=${endTimeISO}&format=miniseed`;
+            console.log("Fetching MiniSEED from:", url);
+            try {
+                const res = await fetch(url);
+                if (!res.ok) throw new Error(`IRIS MiniSEED Fetch failed: ${res.status} ${res.statusText}`);
+                if (res.headers.get("Content-Length") == "0" || res.status === 204) {
+                    throw new Error(`No data returned from IRIS for the requested time window/station (${sta}).`);
+                }
+                const arrayBuffer = await res.arrayBuffer();
+                console.log(`Fetched MiniSEED: ${arrayBuffer.byteLength} bytes`);
+                return arrayBuffer;
+            } catch (error) {
+                console.error("Error fetching MiniSEED:", error);
+                updateStatus(`Error fetching seismic waveform: ${error.message}`, true);
+                return null;
+            }
+        }
+
+        // --- SEISTRONICA Engine (Synths) ---
+        function startSeismicDrone(envelope) { /* ... (same as before, but uses currentFilterType) ... */
+            if (!audioCtx || !isPlaying) return;
+            const droneSource = audioCtx.createBufferSource();
+            const droneBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * SONIFICATION_DURATION_S, audioCtx.sampleRate);
+            const data = droneBuffer.getChannelData(0);
+            let carrierFreq = 50; // Base Hz
+            let modFreq = 7 + Math.random() * 5; // Slightly variable mod freq
+            let modDepth = 5 + Math.random() * 10; // Slightly variable mod depth
+
+            for (let i = 0; i < data.length; i++) {
+                let time = i / audioCtx.sampleRate;
+                // Use currentDroneWaveform for modulator
+                let modulator;
+                switch(currentDroneWaveform) { // Apply drone waveform type to modulator
+                    case 'square': modulator = Math.sign(Math.sin(2 * Math.PI * modFreq * time)) * modDepth; break;
+                    case 'sawtooth': modulator = (2 * (time * modFreq - Math.floor(0.5 + time * modFreq))) * modDepth; break;
+                    case 'triangle': modulator = (2 * Math.abs(2 * (time * modFreq - Math.floor(0.5 + time * modFreq))) - 1) * modDepth; break;
+                    case 'sine':
+                    default: modulator = Math.sin(2 * Math.PI * modFreq * time) * modDepth; break;
+                }
+                // Carrier is always sine for this FM implementation
+                data[i] = Math.sin(2 * Math.PI * (carrierFreq + modulator) * time);
+            }
+            droneSource.buffer = droneBuffer;
+            droneSource.loop = true;
+
+            const droneFilter = audioCtx.createBiquadFilter();
+            droneFilter.type = currentFilterType; // Use current filter type
+            droneFilter.frequency.value = 100;
+            droneFilter.Q.value = 5 + Math.random() * 5; // Slightly variable Q
+
+            const droneGain = audioCtx.createGain();
+            droneGain.gain.value = 0;
+
+            const envelopeNode = audioCtx.createBufferSource();
+            // Resample envelope to match drone sonification duration
+            const resampledEnvelope = resampleLinear(envelope, audioCtx.sampleRate * SONIFICATION_DURATION_S);
+            if(resampledEnvelope.length === 0) {
+                console.warn("Drone envelope is empty, cannot start envelope node.");
+                return; // Don't start drone if envelope fails
+            }
+            const envelopeBuffer = audioCtx.createBuffer(1, resampledEnvelope.length, audioCtx.sampleRate);
+            envelopeBuffer.copyToChannel(resampledEnvelope, 0);
+            envelopeNode.buffer = envelopeBuffer;
+
+            const filterModGain = audioCtx.createGain();
+            filterModGain.gain.value = 3000;
+            envelopeNode.connect(filterModGain).connect(droneFilter.frequency);
+
+            const gainModGain = audioCtx.createGain();
+            gainModGain.gain.value = 0.2; // Max gain modulation
+            envelopeNode.connect(gainModGain).connect(droneGain.gain);
+
+            droneSource.connect(droneFilter).connect(droneGain);
+            droneGain.connect(masterGain);
+            if (reverb) droneGain.connect(reverb);
+            if (delay) droneGain.connect(delay); // Send original signal to delay input
+
+            const t = audioCtx.currentTime;
+            droneSource.start(t);
+            envelopeNode.start(t);
+
+            droneGain.gain.setTargetAtTime(0, t + SONIFICATION_DURATION_S, 0.1);
+            droneSource.stop(t + SONIFICATION_DURATION_S + 0.5);
+            envelopeNode.stop(t + SONIFICATION_DURATION_S + 0.5);
+
+            scheduledEvents.push(droneSource, envelopeNode);
+        }
+        function startBassSequencer(magnitude) { /* ... (same as before, uses currentBassWaveform/currentFilterType) ... */
+            if (!audioCtx || !isPlaying) return;
+            const notes = [36, 38, 40, 41, 43, 45];
+            let noteIndex = 0;
+            const interval = BASS_NOTE_INTERVAL_MS / (1 + (magnitude - MIN_MAGNITUDE) * 0.2);
+            const filterFreq = BASS_FILTER_BASE_FREQ + (magnitude - MIN_MAGNITUDE) * 150;
+            const clampedFilterFreq = Math.min(filterFreq, BASS_FILTER_MAX_FREQ);
+
+            function playBassNote() {
+                if (!isPlaying || !audioCtx) return; // Stop if stopped
+                const now = audioCtx.currentTime;
+                const midiNote = notes[noteIndex % notes.length];
+                const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+
+                const osc = audioCtx.createOscillator();
+                osc.type = currentBassWaveform;
+                osc.frequency.setValueAtTime(freq, now);
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = currentFilterType;
+                filter.frequency.setValueAtTime(clampedFilterFreq, now);
+                filter.Q.value = 8;
+
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.15, now + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + interval * 0.0015);
+
+                osc.connect(filter).connect(gain);
+                gain.connect(masterGain);
+                if (reverb) gain.connect(reverb);
+                if (delay) gain.connect(delay);
+
+                osc.start(now);
+                osc.stop(now + interval * 0.002);
+                osc.onended = () => { osc.disconnect(); filter.disconnect(); gain.disconnect(); }; // Cleanup
+
+                noteIndex++;
+                const timerId = setTimeout(playBassNote, interval);
+                scheduledEvents.push(timerId);
+            }
+            playBassNote();
+         }
+        function startArpeggiator(magnitude, depth) { /* ... (same as before, uses currentArpWaveform/currentFilterType) ... */
+            if (!audioCtx || !isPlaying) return;
+            const scale = [0, 3, 5, 7, 10];
+            const rootNote = 60 + Math.floor((magnitude - MIN_MAGNITUDE) * 2);
+            const interval = ARP_NOTE_INTERVAL_MS * (1 - Math.min(0.5, (magnitude - MIN_MAGNITUDE) * 0.1));
+            const detuneAmount = 5 + depth * 0.1;
+            let noteIndex = 0;
+
+            function playArpNote() {
+                if (!isPlaying || !audioCtx) return; // Stop if stopped
+                const now = audioCtx.currentTime;
+                const scaleDegree = noteIndex % scale.length;
+                const midiNote = rootNote + scale[scaleDegree];
+                const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+
+                const osc1 = audioCtx.createOscillator();
+                osc1.type = currentArpWaveform;
+                osc1.frequency.setValueAtTime(freq, now);
+                osc1.detune.setValueAtTime(-detuneAmount, now);
+
+                const osc2 = audioCtx.createOscillator();
+                osc2.type = currentArpWaveform;
+                osc2.frequency.setValueAtTime(freq, now);
+                osc2.detune.setValueAtTime(detuneAmount, now);
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = currentFilterType;
+                filter.frequency.value = 1500 + Math.sin(now * 2) * 500;
+                filter.Q.value = 2;
+
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.08, now + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + interval * 0.004);
+
+                osc1.connect(filter);
+                osc2.connect(filter);
+                filter.connect(gain);
+                gain.connect(masterGain);
+                 if (reverb) gain.connect(reverb);
+                if (delay) gain.connect(delay);
+
+                osc1.start(now);
+                osc1.stop(now + interval * 0.005);
+                osc2.start(now);
+                osc2.stop(now + interval * 0.005);
+                 osc1.onended = () => { osc1.disconnect(); osc2.disconnect(); filter.disconnect(); gain.disconnect(); }; // Cleanup (attach to one)
+
+                noteIndex++;
+                const timerId = setTimeout(playArpNote, interval);
+                scheduledEvents.push(timerId);
+            }
+            playArpNote();
+         }
+
+        // --- Granular Synthesis Engine ---
+
+        function playGrain(params) {
+            if (!audioCtx || !seismicAudioBuffer || !grainEngineMasterGain || audioCtx.state === 'closed') return;
+
+            const now = audioCtx.currentTime;
+            const grainTime = now + (params.playTimeOffset || 0);
+
+            try {
+                const source = audioCtx.createBufferSource();
+                source.buffer = seismicAudioBuffer;
+                source.playbackRate.value = params.pitch;
+
+                const panner = audioCtx.createStereoPanner();
+                panner.pan.value = params.pan;
+
+                const gainNode = audioCtx.createGain();
+                gainNode.gain.setValueAtTime(0, grainTime);
+                gainNode.gain.linearRampToValueAtTime(params.gain, grainTime + GRAIN_ATTACK_S);
+                gainNode.gain.setTargetAtTime(0, grainTime + GRAIN_ATTACK_S + (params.duration * 0.5), GRAIN_DECAY_S * 0.5);
+
+                source.connect(panner).connect(gainNode).connect(grainEngineMasterGain);
+
+                const maxOffset = seismicAudioBuffer.duration - 0.001;
+                const safeOffset = Math.max(0, Math.min(params.offset, maxOffset));
+                // Duration must be positive and fit within the buffer from the offset
+                const safeDuration = Math.max(0.001, Math.min(params.duration, seismicAudioBuffer.duration - safeOffset));
+
+                if (safeDuration > 0.001 && safeOffset <= maxOffset) {
+                     source.start(grainTime, safeOffset, safeDuration);
+                     const stopTime = grainTime + GRAIN_ATTACK_S + (params.duration * 0.5) + GRAIN_DECAY_S * 2;
+                     source.stop(stopTime);
+                } else {
+                    // console.warn("Skipping grain due to invalid offset/duration.", {offset: params.offset, duration: params.duration, safeOffset, safeDuration, maxOffset});
+                    return; // Don't play if invalid
+                }
+
+                source.onended = () => {
+                    // Check if context still exists before disconnecting
+                    if(audioCtx && audioCtx.state !== 'closed'){
+                         try { source.disconnect(); panner.disconnect(); gainNode.disconnect(); } catch(e){}
+                    }
+                };
+            } catch (error) {
+                console.error("Error playing grain:", error);
+            }
+        }
+
+        // NEW: Determines parameters for the next grain based on style
+        function calculateGrainParams(style) {
+            if (!seismicAudioBuffer) return null;
+
+            const bufferDuration = seismicAudioBuffer.duration;
+            let offset = 0;
+            let duration = GRAIN_MIN_DURATION_S + Math.random() * (GRAIN_MAX_DURATION_S - GRAIN_MIN_DURATION_S);
+            let pitch = GRAIN_MIN_PITCH_SHIFT + Math.random() * (GRAIN_MAX_PITCH_SHIFT - GRAIN_MIN_PITCH_SHIFT);
+            let pan = Math.random() * 2 - 1;
+            let gain = Math.random() * GRAIN_MAX_GAIN;
+            let timeUntilNextGrain = GRAIN_MIN_INTERVAL_MS + Math.random() * (GRAIN_MAX_INTERVAL_MS - GRAIN_MIN_INTERVAL_MS);
+
+            switch (style) {
+                case 'Forward':
+                    offset = grainPlaybackPosition;
+                    // Advance position, wrap around
+                    grainPlaybackPosition = (grainPlaybackPosition + duration * pitch * 0.5) % bufferDuration; // Advance based on perceived duration, overlap slightly
+                    break;
+
+                case 'Reverse':
+                    // Start from current position and go slightly backward
+                    offset = grainPlaybackPosition;
+                     // Decrease position, wrap around backward
+                    let stepBack = duration * pitch * 0.5;
+                    grainPlaybackPosition = (grainPlaybackPosition - stepBack + bufferDuration) % bufferDuration;
+                    // Play the grain forward from the calculated position, even though the position moves backward
+                    break;
+
+                case 'Granular':
+                    if (highEnergyRegions.length > 0) {
+                        const region = getRandom(highEnergyRegions);
+                        const regionStartSeconds = region.startSample / audioCtx.sampleRate;
+                        const regionDurationSeconds = (region.endSample - region.startSample) / audioCtx.sampleRate;
+
+                        if (regionDurationSeconds > duration) {
+                            offset = regionStartSeconds + Math.random() * (regionDurationSeconds - duration);
+                        } else {
+                            offset = regionStartSeconds;
+                            duration = Math.max(GRAIN_MIN_DURATION_S, regionDurationSeconds); // Use region duration if shorter
+                        }
+                        gain *= 1.3; // Slightly louder grains from high energy areas
+                        pitch = 1.0 + (Math.random() - 0.5) * 0.2; // Less pitch variation for clarity
+                    } else {
+                        // Fallback to Random if no regions found
+                        offset = Math.random() * Math.max(0, bufferDuration - duration);
+                    }
+                    break;
+
+                case 'Stutter':
+                     if (stutterInfo.repeatsLeft <= 0) {
+                        // Pick a new position and reset repeats
+                        stutterInfo.basePosition = Math.random() * Math.max(0, bufferDuration - STUTTER_SEGMENT_LENGTH_S);
+                        stutterInfo.segmentDuration = STUTTER_SEGMENT_LENGTH_S * (0.8 + Math.random() * 0.4); // Slight variation
+                        stutterInfo.repeatsLeft = STUTTER_REPEAT_COUNT;
+                        offset = stutterInfo.basePosition;
+                        duration = stutterInfo.segmentDuration;
+                        timeUntilNextGrain = duration * 1000 * pitch * 0.8; // Time next grain tightly
+                        pitch = 1.0; // Keep pitch stable for stutter
+                     } else {
+                         // Repeat from the same base position
+                         offset = stutterInfo.basePosition;
+                         duration = stutterInfo.segmentDuration;
+                         stutterInfo.repeatsLeft--;
+                         timeUntilNextGrain = duration * 1000 * pitch * (0.8 + Math.random() * 0.3); // Slightly variable timing
+                         pitch = 1.0 + (Math.random() - 0.5) * 0.1; // Tiny pitch wobble
+                         pan = (Math.random() - 0.5) * 0.5; // Narrower pan
+                     }
+                    break;
+
+                case 'Random':
+                default:
+                    offset = Math.random() * Math.max(0, bufferDuration - duration);
+                    break;
+            }
+
+            // Final clamping and validation
+            offset = Math.max(0, Math.min(offset, bufferDuration - GRAIN_MIN_DURATION_S));
+            duration = Math.max(GRAIN_MIN_DURATION_S, duration);
+             // Ensure the grain can actually play from the offset
+             if (offset + duration > bufferDuration) {
+                duration = bufferDuration - offset;
+             }
+
+            return { offset, duration, pitch, pan, gain, timeUntilNextGrain };
+        }
+
+
+        function scheduleNextGrain() {
+            if (!isPlaying || !audioCtx || !seismicAudioBuffer || !grainEngineMasterGain || audioCtx.state === 'closed') {
+                return; // Stop scheduling
+            }
+
+            const params = calculateGrainParams(currentGrainStyle);
+            if (!params) { // Could happen if seismicAudioBuffer is null
+                 console.warn("Could not calculate grain params, stopping scheduler.");
+                 return;
+            }
+
+            playGrain(params);
+
+            // Schedule the next call
+            const timerId = setTimeout(scheduleNextGrain, params.timeUntilNextGrain);
+            grainSchedulerIds.push(timerId);
+
+            // Keep scheduler IDs array from growing indefinitely
+            while(grainSchedulerIds.length > 100) { // Limit backlog more aggressively
+                clearTimeout(grainSchedulerIds.shift());
+            }
+        }
+
+        // NEW: Cycles through grain styles
+        function cycleGrainStyle() {
+            const currentIndex = GRAIN_STYLES.indexOf(currentGrainStyle);
+            const nextIndex = (currentIndex + 1) % GRAIN_STYLES.length;
+            currentGrainStyle = GRAIN_STYLES[nextIndex];
+            console.log(`🧬 Grain Style changed to: ${currentGrainStyle}`);
+
+            // Reset state for styles that need it when switching *to* them
+             stutterInfo.repeatsLeft = 0; // Ensure stutter starts fresh if selected
+             // Reset playback position slightly randomized if switching to Forward/Reverse? Optional.
+             // grainPlaybackPosition = Math.random() * (seismicAudioBuffer?.duration || 0);
+
+            updateStatusDisplay(); // Update the UI
+        }
+
+        function startGranularEngine(buffer, envelope) { /* ... (Updated to start style cycling) ... */
+            if (!audioCtx || !buffer) return;
+            console.log("Starting Granular Engine...");
+            seismicAudioBuffer = buffer;
+
+            analyzeEnergyRegions(envelope, GRANULAR_ENERGY_THRESHOLD);
+
+            grainEngineMasterGain = audioCtx.createGain();
+            grainEngineMasterGain.gain.value = 0.8;
+
+            grainEngineMasterGain.connect(masterGain);
+            if (reverb) grainEngineMasterGain.connect(reverb);
+            if (delay) grainEngineMasterGain.connect(delay);
+
+            grainSchedulerIds = [];
+            grainPlaybackPosition = 0; // Start Forward/Reverse from beginning
+            stutterInfo = { repeatsLeft: 0, basePosition: 0, segmentDuration: STUTTER_SEGMENT_LENGTH_S }; // Reset stutter
+            currentGrainStyle = getRandom(GRAIN_STYLES); // Start with a random style
+
+            scheduleNextGrain(); // Start the grain scheduling loop
+
+            // Start the style cycling
+            stopGranularStyleScheduler(); // Ensure no duplicates
+            cycleGrainStyle(); // Set initial style and update UI immediately
+            grainStyleIntervalId = setInterval(cycleGrainStyle, GRAIN_STYLE_INTERVAL);
+
+            console.log("Granular Engine started.");
+        }
+
+         // NEW Helper to stop only the style scheduler
+         function stopGranularStyleScheduler() {
+             if (grainStyleIntervalId) {
+                clearInterval(grainStyleIntervalId);
+                grainStyleIntervalId = null;
+            }
+         }
+
+        function stopGranularEngine() { /* ... (Updated to use helper) ... */
+            console.log("Stopping Granular Engine...");
+            stopGranularStyleScheduler(); // Stop cycling styles
+
+            grainSchedulerIds.forEach(id => clearTimeout(id));
+            grainSchedulerIds = [];
+
+            if (grainEngineMasterGain && audioCtx && audioCtx.state !== 'closed') {
+                 const gainNode = grainEngineMasterGain; // Capture ref
+                 grainEngineMasterGain = null; // Nullify immediately
+                 gainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+                 gainNode.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+                 setTimeout(() => {
+                    if(audioCtx && audioCtx.state !== 'closed'){
+                         try { gainNode.disconnect(); } catch(e){}
+                         console.log("Granular Engine gain disconnected.");
+                    }
+                 }, 200);
+            } else {
+                 grainEngineMasterGain = null;
+            }
+
+            seismicAudioBuffer = null;
+            highEnergyRegions = [];
+            console.log("Granular Engine stopped.");
+        }
+
+
+        function analyzeEnergyRegions(envelope, threshold) { /* ... (Improved logic) ... */
+             console.log("Analyzing energy regions...");
+             highEnergyRegions = [];
+             if (!envelope || envelope.length === 0 || !audioCtx) return;
+
+            const windowSize = Math.floor(audioCtx.sampleRate * 0.05); // Approx samples per envelope value
+            if (windowSize <= 0) return; // Need valid window size
+
+            let inRegion = false;
+            let regionStartIndex = -1;
+
+            for(let i = 0; i < envelope.length; i++) {
+                if (envelope[i] >= threshold && !inRegion) {
+                    inRegion = true;
+                    regionStartIndex = i;
+                } else if ((envelope[i] < threshold || i === envelope.length - 1) && inRegion) {
+                    // End of region (below threshold or end of envelope)
+                    inRegion = false;
+                    const startSample = regionStartIndex * windowSize;
+                    // If ending because we reached the end, use the last index
+                    const endSampleIndex = (envelope[i] < threshold) ? i : envelope.length;
+                    const endSample = endSampleIndex * windowSize;
+
+                    // Ensure region has meaningful duration in samples
+                    if (endSample > startSample + 10) { // Require minimum sample length
+                       highEnergyRegions.push({ startSample, endSample });
+                    }
+                    regionStartIndex = -1; // Reset start index
+                }
+            }
+            console.log(`Found ${highEnergyRegions.length} high energy regions.`);
+        }
+
+
+        // --- Control Flow ---
+        function updateStatus(message, isError = false, isLoading = false) {
+            // This function now PRIMARILY handles loading/error states
+            // The main quake info + grain style is handled by updateStatusDisplay
+            if (isLoading || isError) {
+                statusInfo.innerHTML = `<span class="${isError ? 'error' : 'loading'}">${message}</span>`;
+                statusInfo.className = isError ? 'info error' : 'info loading';
+                baseStatusHTML = ""; // Clear base info if showing error/loading
+            } else {
+                 // If just a general status message, display it simply
+                 statusInfo.innerHTML = message;
+                 statusInfo.className = 'info';
+                 baseStatusHTML = message; // Store as base if it's not error/loading
+            }
+        }
+
+        // NEW: Updates the status display with quake info and grain style
+        function updateStatusDisplay() {
+             if (!isPlaying || !currentQuakeInfo) {
+                 // If not playing, show the last message from updateStatus
+                 return;
+             }
+             // Reconstruct the status message
+             let html = baseStatusHTML; // Start with the stored quake info
+            // Print Grain Style > html += `<span class="status-line grain-style">Grain Style: <strong>${currentGrainStyle}</strong></span>`;
+            // Optionally add synth timbre info
+            // html += `<span class="status-line">Synth: ${currentDroneWaveform}/${currentBassWaveform}/${currentArpWaveform} (${currentFilterType})</span>`;
+
+             statusInfo.innerHTML = html;
+             statusInfo.className = 'info'; // Ensure correct class
+        }
+
+
+        async function startSonification() {
+            if (isPlaying) return;
+            startBtn.disabled = true;
+            updateStatus("Initializing...", false, true);
+
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: SAMPLE_RATE });
+                 // Check context state after creation
+                 if (audioCtx.state === 'suspended') {
+                    await audioCtx.resume(); // Attempt to resume if suspended
+                 }
+                 if (audioCtx.state !== 'running') {
+                     throw new Error(`AudioContext failed to start (${audioCtx.state}). User interaction might be required.`);
+                 }
+
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0;
+                masterGain.connect(audioCtx.destination);
+
+                await createReverb();
+                createDelay();
+
+                updateStatus("Fetching latest earthquake data...", false, true);
+                const event = await fetchLatestEvent();
+                 if (!event) { stopSonification(); return; }
+
+                currentQuakeInfo = {
+                    place: event.properties.place || "Unknown location",
+                    mag: event.properties.mag || 0,
+                    depth: event.geometry.coordinates[2] || 0,
+                    time: new Date(event.properties.time).toISOString(),
+                    usgsUrl: `https://earthquake.usgs.gov/earthquakes/eventpage/${event.id}/executive`
+                };
+                updateStatus(`Found Event: M${currentQuakeInfo.mag.toFixed(1)} ${currentQuakeInfo.place} (Depth: ${currentQuakeInfo.depth.toFixed(1)} km). Fetching waveform...`, false, true);
+
+                const miniSEEDBuffer = await fetchMiniSEED(currentQuakeInfo.time);
+                if (!miniSEEDBuffer) { stopSonification(); return; }
+
+                updateStatus(`Processing waveform for M${currentQuakeInfo.mag.toFixed(1)} event...`, false, true);
+                const rawSamples = parseMiniSEED(miniSEEDBuffer);
+                if (!rawSamples || rawSamples.length === 0) {
+                     throw new Error("Parsed seismic data is empty or invalid.");
+                }
+
+                // Use original duration data for granular source and envelope analysis
+                seismicBuffer = rawSamples; // Keep original length Float32Array
+                seismicAmplitudeEnvelope = extractEnvelope(seismicBuffer, Math.floor(audioCtx.sampleRate * 0.05));
+
+                // Create AudioBuffer for Granular Engine
+                const granularSourceBuffer = createAudioBufferFromFloat32Array(seismicBuffer);
+                if (!granularSourceBuffer) {
+                    throw new Error("Failed to create AudioBuffer for granular synthesis.");
+                }
+
+                // Prepare drone envelope (resampled to fit SONIFICATION_DURATION_S)
+                const droneEnvelope = extractEnvelope(
+                    resampleLinear(seismicBuffer, audioCtx.sampleRate * SONIFICATION_DURATION_S),
+                    Math.floor(audioCtx.sampleRate * 0.05)
+                );
+
+                // --- Store base status HTML ---
+                baseStatusHTML = `
+                    <span class="status-line">Now Playing: <strong>M${currentQuakeInfo.mag.toFixed(1)}</strong> ${currentQuakeInfo.place}</span>
+                    <span class="status-line">Depth: <strong>${currentQuakeInfo.depth.toFixed(1)} km</strong>, Time: ${new Date(currentQuakeInfo.time).toLocaleString()}</span>
+                    <span class="status-line"><a href="${currentQuakeInfo.usgsUrl}" target="_blank">View on USGS</a> | Station: ${STATION_INFO.net}.${STATION_INFO.sta}</span>
+                `;
+                updateStatusDisplay(); // Show initial status
+
+                // --- Start the SEISTRONICA elements ---
+                isPlaying = true;
+
+                const reverbLevel = 0.15 + Math.min(0.6, currentQuakeInfo.depth / 500);
+                if(reverbWetGain) reverbWetGain.gain.setTargetAtTime(reverbLevel, audioCtx.currentTime, 0.1);
+                const delayTime = 0.1 + Math.min(0.6, currentQuakeInfo.depth / 300);
+                if(delay) delay.delayTime.setTargetAtTime(delayTime, audioCtx.currentTime, 0.1);
+
+                applyRandomTimbre(); // Initial synth/effect timbre
+                startTimbreScheduler(); // Start synth/effect randomization
+
+                startGranularEngine(granularSourceBuffer, seismicAmplitudeEnvelope); // Start granular engine (starts its own style cycling)
+                startSeismicDrone(droneEnvelope);
+                startBassSequencer(currentQuakeInfo.mag);
+                startArpeggiator(currentQuakeInfo.mag, currentQuakeInfo.depth);
+
+                masterGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                masterGain.gain.setTargetAtTime(0.7, audioCtx.currentTime, 0.8);
+
+                stopBtn.disabled = false; // Enable stop now
+
+            } catch (error) {
+                console.error("Error during startup:", error);
+                updateStatus(`Startup Error: ${error.message}`, true);
+                stopSonification();
+            }
+        }
+
+        function stopSonification() {
+             // Prevent multiple stops
+             if (!isPlaying && audioCtx?.state !== 'running' && !grainEngineMasterGain && scheduledEvents.length === 0) {
+                 console.log("Stop called but appears already stopped.");
+                 startBtn.disabled = false;
+                 stopBtn.disabled = true;
+                 // Ensure status reflects stopped state if UI got stuck
+                 if (statusInfo.className.includes('loading') || statusInfo.className.includes('error') || baseStatusHTML === "") {
+                      updateStatus("Sonification stopped. Press Start to fetch new data.");
+                 } else if (isPlaying === false){
+                     // If was playing and now stopped, keep last quake info but update grain style? No, just say stopped.
+                      updateStatus("Sonification stopped. Press Start to fetch new data.");
+                 }
+                 return;
+             }
+
+            console.log("Stopping sonification...");
+            isPlaying = false; // Set flag FIRST
+
+            stopGranularEngine(); // Stop granular FIRST (clears its own timers)
+            stopTimbreScheduler(); // Stop synth timbre changes
+
+            // Stop other scheduled timeouts (Bass/Arp) and audio nodes (Drone)
+            scheduledEvents.forEach(event => {
+                if (typeof event === 'number') { // Timeout ID
+                    clearTimeout(event);
+                } else if (event && typeof event.stop === 'function' && event.context && event.context.state === 'running') { // Audio Node
+                    try { event.stop(audioCtx.currentTime + 0.05); } catch(e) { /* ignore */ }
+                }
+            });
+            scheduledEvents = [];
+
+
+            if (audioCtx && audioCtx.state !== 'closed') {
+                const currentContext = audioCtx; // Capture current context
+                const t = currentContext.currentTime;
+
+                // Fade out master gain
+                if (masterGain && masterGain.gain) {
+                    masterGain.gain.cancelScheduledValues(t);
+                    masterGain.gain.setTargetAtTime(0.0, t, 0.15);
+                }
+
+                // Close context after fade out
+                 audioCtx = null; // Nullify immediately
+                setTimeout(() => {
+                    if (currentContext && currentContext.state !== 'closed') {
+                        currentContext.close().then(() => {
+                            console.log("AudioContext closed.");
+                        }).catch(e => console.warn("Error closing AudioContext:", e));
+                    }
+                }, 300);
+            } else {
+                 console.log("AudioContext already null or closed.");
+                 audioCtx = null; // Ensure it's null
+            }
+
+            // Final UI reset
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            updateStatus("Sonification stopped. Press Start to fetch new data."); // Set final stopped message
+            currentQuakeInfo = null;
+            baseStatusHTML = ""; // Clear saved status
+            seismicBuffer = null;
+            seismicAmplitudeEnvelope = null;
+        }
+
+        // --- Event Listeners ---
+        startBtn.onclick = startSonification;
+        stopBtn.onclick = stopSonification;
+
+    </script>
+</body>
+</html>
