@@ -1,0 +1,948 @@
+<!--
+[SOS - Sounds Of Seismic]
+https://sos.allshookup.org/
+Copyright (c) [02025] [SHOOK aka D.V.R.]
+
+SOS is free software: you can redistribute it and/or modify
+it under the terms of the MIT License (https://opensource.org/license/mit)
+-->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seismic Granular Synthesizer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #222; /* Slightly lighter dark */
+      color: #eee;
+      padding: 20px;
+      font-size: 14px;
+    }
+    h1, h2 {
+      text-align: center;
+      color: #ff6f00;
+      margin-bottom: 15px;
+    }
+    h2 {
+      font-size: 1.2em;
+      margin-top: 25px;
+      border-bottom: 1px solid #555;
+      padding-bottom: 5px;
+    }
+	.main-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .control-section {
+      background: #333;
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid #444;
+    }
+    .control-group {
+      margin-bottom: 15px;
+      display: flex;
+      flex-direction: column; /* Stack label/value above slider */
+      gap: 5px;
+    }
+    .control-group label {
+      display: flex;
+      justify-content: space-between; /* Label left, value right */
+      font-weight: 600;
+      font-size: 0.9em;
+      color: #ccc;
+    }
+    .control-group label .value-display {
+      font-weight: 400;
+      color: #ff6f00; 
+      min-width: 50px; /* Ensure space for value */
+      text-align: right;
+    }
+    input[type="range"] {
+      width: 100%;
+      cursor: pointer;
+    }
+    input[type="number"], select {
+        padding: 5px;
+        background: #444;
+        color: #eee;
+        border: 1px solid #555;
+        border-radius: 4px;
+        width: 80px; /* Specific width for number/select */
+    }
+    button {
+      background: #555;
+      border: none;
+      color: white;
+      font-size: 1em;
+      padding: 8px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 5px;
+      margin-right: 5px;
+      border: 1px solid #666;
+    }
+    button:hover {
+      background: #ff6f00;
+      color: #111;
+    }
+    button:disabled {
+      background: #444;
+      color: #888;
+      cursor: not-allowed;
+    }
+    .info-section {
+        grid-column: 1 / -1; /* Span full width */
+        background: #333;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #444;
+        text-align: center;
+        font-size: 0.95em;
+    }
+    .info-section a {
+      color: #ff6f00;
+      text-decoration: none;
+    }
+    .info-section a:hover {
+      text-decoration: underline;
+    }
+    .seismic-link {
+      color: #ff6f00; 
+      font-weight: bold;
+    }
+    .mute-solo button {
+        font-size: 0.8em;
+        padding: 3px 6px;
+    }
+    .mapping-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+    }
+    .mapping-group select, .mapping-group label {
+        flex-grow: 1;
+    }
+  </style>
+</head>
+<body>
+  <h1>Seismic Granular Synthesizer</h1>
+
+  <div class="main-container">
+
+    <!-- Master Controls Section -->
+    <section class="control-section">
+      <h2>Master Controls</h2>
+      <div class="control-group">
+          <button id="startButton">Start</button>
+          <button id="stopButton" disabled>Stop</button>
+      </div>
+      <div class="control-group">
+        <label for="masterVolume">Master Volume: <span class="value-display" id="masterVolumeValue">0.6</span></label>
+        <input type="range" id="masterVolume" min="0" max="1" step="0.01" value="0.6">
+      </div>
+       <div class="control-group">
+        <label for="masterBPM">Master BPM: <span class="value-display" id="masterBPMValue">369</span></label>
+        <input type="range" id="masterBPM" min="30" max="500" step="1" value="369">
+        <!-- Or use number input: <input type="number" id="masterBPM" min="30" max="500" step="1" value="369"> -->
+      </div>
+      <div class="control-group">
+          <button id="resetButton">Reset All Settings</button>
+          <button id="saveButton">Save Settings to HTML</button>
+      </div>
+    </section>
+
+    <!-- Component Mix Section -->
+    <section class="control-section">
+      <h2>Component Mix</h2>
+      <div class="control-group">
+        <label for="seismicVolume">Seismic Waveform Vol: <span class="value-display" id="seismicVolumeValue">0.8</span></label>
+        <input type="range" id="seismicVolume" min="0" max="1.5" step="0.01" value="0.8">
+        <div class="mute-solo"> <button class="mute-btn" data-target="seismic">M</button> <button class="solo-btn" data-target="seismic">S</button> </div>
+      </div>
+       <div class="control-group">
+        <label for="bassVolume">Bass Pulse Vol: <span class="value-display" id="bassVolumeValue">0.08</span></label>
+        <input type="range" id="bassVolume" min="0" max="0.3" step="0.005" value="0.08">
+        <div class="mute-solo"> <button class="mute-btn" data-target="bass">M</button> <button class="solo-btn" data-target="bass">S</button> </div>
+      </div>
+      <div class="control-group">
+        <label for="melodyVolume">Melody Pulse Vol: <span class="value-display" id="melodyVolumeValue">0.05</span></label>
+        <input type="range" id="melodyVolume" min="0" max="0.3" step="0.005" value="0.05">
+         <div class="mute-solo"> <button class="mute-btn" data-target="melody">M</button> <button class="solo-btn" data-target="melody">S</button> </div>
+      </div>
+      <div class="control-group">
+        <label for="granularVolume">Granular Cloud Vol: <span class="value-display" id="granularVolumeValue">0.04</span></label>
+        <input type="range" id="granularVolume" min="0" max="0.2" step="0.002" value="0.04">
+         <div class="mute-solo"> <button class="mute-btn" data-target="granular">M</button> <button class="solo-btn" data-target="granular">S</button> </div>
+      </div>
+    </section>
+
+    <!-- Bass Controls Section -->
+    <section class="control-section">
+      <h2>Bass Pulse</h2>
+       <div class="control-group">
+        <label for="bassOscType">Oscillator Type: <span class="value-display" id="bassOscTypeValue">square</span></label>
+        <select id="bassOscType">
+          <option value="sine">Sine</option>
+          <option value="square" selected>Square</option>
+          <option value="sawtooth">Sawtooth</option>
+          <option value="triangle">Triangle</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label for="bassFreq">Base Frequency (Hz): <span class="value-display" id="bassFreqValue">41.2</span></label>
+        <input type="range" id="bassFreq" min="20" max="100" step="0.1" value="41.2">
+      </div>
+       <div class="control-group">
+        <label for="bassFiltFreq">Filter Freq (Hz): <span class="value-display" id="bassFiltFreqValue">160</span></label>
+        <input type="range" id="bassFiltFreq" min="40" max="1000" step="5" value="160">
+      </div>
+      <div class="control-group">
+        <label for="bassFiltQ">Filter Q (Resonance): <span class="value-display" id="bassFiltQValue">1</span></label>
+        <input type="range" id="bassFiltQ" min="0.1" max="10" step="0.1" value="1">
+      </div>
+        <div class="control-group">
+        <label for="bassAttack">Attack (s): <span class="value-display" id="bassAttackValue">0.01</span></label>
+        <input type="range" id="bassAttack" min="0.001" max="0.1" step="0.001" value="0.01">
+      </div>
+        <div class="control-group">
+        <label for="bassDecay">Decay (s): <span class="value-display" id="bassDecayValue">0.1</span></label>
+        <input type="range" id="bassDecay" min="0.01" max="0.5" step="0.005" value="0.1">
+      </div>
+    </section>
+    
+
+    <!-- Melody Controls Section -->
+    <section class="control-section">
+        <h2>Melody Pulse</h2>
+         <div class="control-group">
+            <label for="melodyOscType">Oscillator Type: <span class="value-display" id="melodyOscTypeValue">triangle</span></label>
+            <select id="melodyOscType">
+            <option value="sine">Sine</option>
+            <option value="square">Square</option>
+            <option value="sawtooth">Sawtooth</option>
+            <option value="triangle" selected>Triangle</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="melodyScale">Base Scale/Freq (Hz): <span class="value-display" id="melodyScaleValue">D2-E3</span></label>
+             <select id="melodyScale">
+                <option value="73.5,82.5,98,110,147,165" selected>Low D2-E3 Scale</option>
+                <option value="147,165,196,220,294,330">Mid D3-E4 Scale</option>
+                <option value="294,330,392,440,587,659">High D4-E5 Scale</option>
+                <option value="110">Fixed A2 (110Hz)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <label for="melodyFiltFreq">Filter Freq (Hz): <span class="value-display" id="melodyFiltFreqValue">400</span></label>
+            <input type="range" id="melodyFiltFreq" min="100" max="2000" step="10" value="400">
+        </div>
+        <div class="control-group">
+            <label for="melodyFiltQ">Filter Q (Resonance): <span class="value-display" id="melodyFiltQValue">2</span></label>
+            <input type="range" id="melodyFiltQ" min="0.1" max="10" step="0.1" value="2">
+        </div>
+         <div class="control-group">
+            <label for="melodyPulseDur">Pulse Duration (s): <span class="value-display" id="melodyPulseDurValue">0.05</span></label>
+            <input type="range" id="melodyPulseDur" min="0.01" max="0.2" step="0.005" value="0.05">
+        </div>
+    </section>
+
+    <!-- Granular Synthesis Controls Section -->
+    <section class="control-section">
+        <h2>Granular Cloud</h2>
+        <div class="control-group">
+            <label for="grainInterval">Avg. Interval (ms): <span class="value-display" id="grainIntervalValue">40</span></label>
+            <input type="range" id="grainInterval" min="5" max="200" step="1" value="40"> <!-- Value in ms -->
+        </div>
+        <div class="control-group">
+            <label for="grainJitter">Timing Jitter (ms): <span class="value-display" id="grainJitterValue">20</span></label>
+            <input type="range" id="grainJitter" min="0" max="50" step="1" value="20"> <!-- Value in ms -->
+        </div>
+         <div class="control-group">
+            <label for="grainMinDur">Min Duration (ms): <span class="value-display" id="grainMinDurValue">30</span></label>
+            <input type="range" id="grainMinDur" min="5" max="100" step="1" value="30"> <!-- Value in ms -->
+        </div>
+         <div class="control-group">
+            <label for="grainMaxDur">Max Duration (ms): <span class="value-display" id="grainMaxDurValue">100</span></label>
+            <input type="range" id="grainMaxDur" min="10" max="300" step="5" value="100"> <!-- Value in ms -->
+        </div>
+        <div class="control-group">
+            <label for="grainMinFreq">Min Frequency (Hz): <span class="value-display" id="grainMinFreqValue">35</span></label>
+            <input type="range" id="grainMinFreq" min="20" max="500" step="1" value="35">
+        </div>
+        <div class="control-group">
+            <label for="grainMaxFreq">Max Frequency (Hz): <span class="value-display" id="grainMaxFreqValue">120</span></label>
+            <input type="range" id="grainMaxFreq" min="50" max="2000" step="5" value="120">
+        </div>
+         <div class="control-group">
+            <label for="grainOscType">Grain Waveform: <span class="value-display" id="grainOscTypeValue">sine</span></label>
+            <select id="grainOscType">
+            <option value="sine" selected>Sine</option>
+            <option value="triangle">Triangle</option>
+            <option value="square">Square</option>
+            <option value="sawtooth">Sawtooth</option>
+            </select>
+        </div>
+    </section>
+
+    <!-- Seismic Mapping Controls -->
+     <section class="control-section">
+         <h2>Seismic Parameter Mapping</h2>
+         <div class="control-group">
+             <label for="mappingToggle">Enable Mapping: <input type="checkbox" id="mappingToggle" checked></label>
+         </div>
+         <div class="mapping-group">
+            <label for="mapSourceParam">Source:</label>
+            <select id="mapSourceParam">
+                <option value="mag" selected>Magnitude</option>
+                <option value="depth">Depth (if available)</option>
+                <!-- Add others if data becomes available -->
+            </select>
+         </div>
+         <div class="mapping-group">
+             <label for="mapTargetParam">Target:</label>
+             <select id="mapTargetParam">
+                <option value="density" selected>Granular Density</option>
+                <option value="pitch_range">Granular Pitch Range</option>
+                <option value="pitch_center">Granular Pitch Center</option>
+                <option value="duration">Granular Duration</option>
+                <option value="volume">Granular Volume</option>
+            </select>
+         </div>
+         <div class="control-group">
+            <label for="mapIntensity">Mapping Intensity: <span class="value-display" id="mapIntensityValue">0.5</span></label>
+            <input type="range" id="mapIntensity" min="0" max="2" step="0.05" value="0.5">
+        </div>
+     </section>
+
+
+    <!-- Info Section -->
+    <section class="info-section">
+      <div id="eventInfo">Waiting for seismic data…</div>
+    </section>
+
+  </div><!-- End Main Container -->
+
+  <!-- Load Saved Settings (if they exist) -->
+  <!-- The save function will inject settings here -->
+
+  <script>
+    // --- Settings Object (Defaults) ---
+    // This object holds the state of all UI controls.
+    // It will be overridden by window.savedSettings if loading a saved file.
+    let settings = {
+      masterVolume: 0.6,
+      masterBPM: 369,
+      seismicVolume: 0.8,
+      bassVolume: 0.08,
+      melodyVolume: 0.05,
+      granularVolume: 0.04,
+      // Bass
+      bassOscType: 'square',
+      bassFreq: 41.2,
+      bassFiltFreq: 160,
+      bassFiltQ: 1,
+      bassAttack: 0.01,
+      bassDecay: 0.1,
+      // Melody
+      melodyOscType: 'triangle',
+      melodyScale: '73.5,82.5,98,110,147,165', // Store as string, parse later
+      melodyFiltFreq: 400,
+      melodyFiltQ: 2,
+      melodyPulseDur: 0.05,
+      // Granular
+      grainInterval: 40, // ms
+      grainJitter: 20, // ms
+      grainMinDur: 30, // ms
+      grainMaxDur: 100, // ms
+      grainMinFreq: 35, // Hz
+      grainMaxFreq: 120, // Hz
+      grainOscType: 'sine',
+      // Mapping
+      mappingEnabled: true,
+      mapSourceParam: 'mag',
+      mapTargetParam: 'density',
+      mapIntensity: 0.5,
+      // Mute/Solo (Internal state, not saved directly in file this way)
+      muteState: { seismic: false, bass: false, melody: false, granular: false },
+      soloTarget: null // which component is soloed, null if none
+    };
+
+    // --- Core Audio Variables ---
+    let audioCtx = null;
+    let loopTimer = null;
+    let intervalIDs = []; // Stores timeouts for Bass, Melody
+    let granularTimeoutId = null; // Separate ID for granular loop
+    let quakeInfo = null;
+    let waveformBuffer = null;
+    let masterGain;
+    let msPerBeat = (60 / settings.masterBPM) * 1000; // Initialize based on default BPM
+
+    // TODO: Create dedicated GainNodes for each component for Mute/Solo/Volume control
+    let seismicGainNode = null;
+    let bassGainNode = null;
+    let melodyGainNode = null;
+    let granularGainNode = null;
+
+    // --- UI Element References ---
+    const startBtn = document.getElementById("startButton");
+    const stopBtn = document.getElementById("stopButton");
+    const infoDiv = document.getElementById("eventInfo");
+    const controls = {
+        masterVolume: document.getElementById('masterVolume'),
+        masterBPM: document.getElementById('masterBPM'),
+        seismicVolume: document.getElementById('seismicVolume'),
+        bassVolume: document.getElementById('bassVolume'),
+        melodyVolume: document.getElementById('melodyVolume'),
+        granularVolume: document.getElementById('granularVolume'),
+        bassOscType: document.getElementById('bassOscType'),
+        bassFreq: document.getElementById('bassFreq'),
+        bassFiltFreq: document.getElementById('bassFiltFreq'),
+        bassFiltQ: document.getElementById('bassFiltQ'),
+        bassAttack: document.getElementById('bassAttack'),
+        bassDecay: document.getElementById('bassDecay'),
+        melodyOscType: document.getElementById('melodyOscType'),
+        melodyScale: document.getElementById('melodyScale'),
+        melodyFiltFreq: document.getElementById('melodyFiltFreq'),
+        melodyFiltQ: document.getElementById('melodyFiltQ'),
+        melodyPulseDur: document.getElementById('melodyPulseDur'),
+        grainInterval: document.getElementById('grainInterval'),
+        grainJitter: document.getElementById('grainJitter'),
+        grainMinDur: document.getElementById('grainMinDur'),
+        grainMaxDur: document.getElementById('grainMaxDur'),
+        grainMinFreq: document.getElementById('grainMinFreq'),
+        grainMaxFreq: document.getElementById('grainMaxFreq'),
+        grainOscType: document.getElementById('grainOscType'),
+        mappingToggle: document.getElementById('mappingToggle'),
+        mapSourceParam: document.getElementById('mapSourceParam'),
+        mapTargetParam: document.getElementById('mapTargetParam'),
+        mapIntensity: document.getElementById('mapIntensity'),
+        resetButton: document.getElementById('resetButton'),
+        saveButton: document.getElementById('saveButton'),
+    };
+    const valueDisplays = { // References to the <span> elements
+        masterVolume: document.getElementById('masterVolumeValue'),
+        masterBPM: document.getElementById('masterBPMValue'),
+        seismicVolume: document.getElementById('seismicVolumeValue'),
+        bassVolume: document.getElementById('bassVolumeValue'),
+        melodyVolume: document.getElementById('melodyVolumeValue'),
+        granularVolume: document.getElementById('granularVolumeValue'),
+        bassOscType: document.getElementById('bassOscTypeValue'),
+        bassFreq: document.getElementById('bassFreqValue'),
+        bassFiltFreq: document.getElementById('bassFiltFreqValue'),
+        bassFiltQ: document.getElementById('bassFiltQValue'),
+        bassAttack: document.getElementById('bassAttackValue'),
+        bassDecay: document.getElementById('bassDecayValue'),
+        melodyOscType: document.getElementById('melodyOscTypeValue'),
+        melodyScale: document.getElementById('melodyScaleValue'),
+        melodyFiltFreq: document.getElementById('melodyFiltFreqValue'),
+        melodyFiltQ: document.getElementById('melodyFiltQValue'),
+        melodyPulseDur: document.getElementById('melodyPulseDurValue'),
+        grainInterval: document.getElementById('grainIntervalValue'),
+        grainJitter: document.getElementById('grainJitterValue'),
+        grainMinDur: document.getElementById('grainMinDurValue'),
+        grainMaxDur: document.getElementById('grainMaxDurValue'),
+        grainMinFreq: document.getElementById('grainMinFreqValue'),
+        grainMaxFreq: document.getElementById('grainMaxFreqValue'),
+        grainOscType: document.getElementById('grainOscTypeValue'),
+        mapIntensity: document.getElementById('mapIntensityValue'),
+    };
+
+    // --- Fetching/Parsing/Resampling/Building Functions (Identical to previous versions) ---
+    async function fetchLatestEvent() {
+      const end = new Date().toISOString();
+      const start = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${start}&endtime=${end}&minmagnitude=6.0`;
+      const res = await fetch(url);
+      const data = await res.json();
+      return data.features[0];
+    }
+    async function fetchMiniSEED(startTime) {
+      const duration = 60;
+      const endTime = new Date(new Date(startTime).getTime() + duration * 1000).toISOString();
+      const url = `https://service.iris.edu/fdsnws/dataselect/1/query?net=IU&sta=ANMO&loc=00&cha=BHZ&starttime=${startTime}&endtime=${endTime}&format=miniseed`;
+      const res = await fetch(url);
+      return await res.arrayBuffer();
+    }
+    function parseMiniSEED(buffer) {
+        try {
+            const view = new DataView(buffer);
+            let offset = 48; const recordLenCode = view.getUint8(6); /* eslint-disable-line no-unused-vars */ const recordLen = Math.pow(2, recordLenCode); const dataOffsetCode = view.getUint16(44, false); if (dataOffsetCode === 0) offset = 60; const numSamples = view.getInt16(30, false); if (offset + numSamples * 4 > buffer.byteLength) { console.warn("Calculated data size exceeds buffer length. Attempting fallback offset."); offset = 60; if (offset + numSamples * 4 > buffer.byteLength) { throw new Error("Cannot reliably determine data start offset or buffer is too small."); } } const data = new Int32Array(numSamples); for (let i = 0; i < numSamples; i++) { data[i] = view.getInt32(offset + i * 4, false); } console.log(`Parsed ${numSamples} samples.`); return normalize(Array.from(data));
+        } catch (error) { console.error("Error parsing MiniSEED:", error); console.error("Buffer Length:", buffer.byteLength); return new Float32Array(1000).fill(0); }
+    }
+    function normalize(data) { const max = Math.max(...data.map(Math.abs)) || 1; return data.map(x => x / max); }
+    function resample(input, newLen) { const output = new Float32Array(newLen); if (input.length === 0 || newLen === 0) return output; const factor = (input.length - 1) / (newLen > 1 ? newLen - 1 : 1); if (input.length === 1) { output.fill(input[0]); return output; } for (let i = 0; i < newLen; i++) { const idx = i * factor; const i0 = Math.floor(idx); const i1 = Math.min(i0 + 1, input.length - 1); const frac = idx - i0; output[i] = (1 - frac) * input[i0] + frac * input[i1]; } return output; }
+    function buildWaveformBuffer(samples) { if (!samples || samples.length === 0) { console.warn("buildWaveformBuffer received empty or invalid samples."); const silentBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate * 1, audioCtx.sampleRate); silentBuffer.getChannelData(0).fill(0); return silentBuffer; } const targetDuration = 8; const targetSamples = targetDuration * audioCtx.sampleRate; const stretched = resample(samples, targetSamples); const buf = audioCtx.createBuffer(1, stretched.length, audioCtx.sampleRate); buf.copyToChannel(stretched, 0); return buf; }
+
+    // --- Seismic Playback (Needs Gain Node integration) ---
+    function playWaveform() {
+      if (!waveformBuffer || !audioCtx || waveformBuffer.length === 0 || !seismicGainNode) { // Check gain node
+        console.warn("Cannot play waveform: No buffer, audio context, or gain node.");
+        return;
+      }
+      const source = audioCtx.createBufferSource();
+      source.buffer = waveformBuffer;
+
+      // Use the dedicated gain node now, volume is controlled by slider -> settings -> node
+      // seismicGainNode.gain.setValueAtTime(settings.seismicVolume, audioCtx.currentTime); // Set initial gain
+
+      // Envelope is applied to the source *before* the controllable gain node
+      const envelopeGain = audioCtx.createGain();
+      envelopeGain.gain.setValueAtTime(0, audioCtx.currentTime);
+      envelopeGain.gain.linearRampToValueAtTime(1.0, audioCtx.currentTime + 0.1); // Ramp up to full
+      envelopeGain.gain.setValueAtTime(1.0, audioCtx.currentTime + waveformBuffer.duration - 0.2); // Hold
+      envelopeGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + waveformBuffer.duration - 0.1); // Fade out quickly
+
+      // source -> envelope -> controllable gain -> master
+      source.connect(envelopeGain).connect(seismicGainNode); // Connect to specific gain node
+      source.start();
+      source.stop(audioCtx.currentTime + waveformBuffer.duration);
+    }
+
+    // --- Ambient Loops (Use settings object, Need Gain Node integration) ---
+
+    function loopAmbient() {
+      loopBass();
+      loopMelody();
+      loopGranularCloud();
+    }
+
+    function loopBass() {
+      if (!audioCtx || audioCtx.state === 'closed' || !bassGainNode) return; // Check gain node
+
+      // Use values from settings object
+      const baseFreq = parseFloat(settings.bassFreq);
+      // Basic frequency selection logic (could be improved)
+      const freqs = [baseFreq, baseFreq, baseFreq, baseFreq * (32.7/41.2)]; // Rough ratio for C1
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain(); // This is the *envelope* gain
+      const filter = audioCtx.createBiquadFilter();
+
+      osc.type = settings.bassOscType;
+      osc.frequency.value = freqs[Math.floor(Math.random() * freqs.length)];
+
+      filter.type = "lowpass";
+      // TODO: Update live audio parameter - Use smooth ramping?
+      filter.frequency.value = settings.bassFiltFreq;
+      filter.Q.value = settings.bassFiltQ;
+
+      const pulseIntervalMs = 2 * msPerBeat;
+      const noteDuration = parseFloat(settings.bassDecay); // Use decay setting for duration
+      const attackTime = parseFloat(settings.bassAttack);
+      const startTime = audioCtx.currentTime;
+
+      // Use the 'component' gain setting for the envelope peak
+      gain.gain.setValueAtTime(0.0, startTime);
+      gain.gain.linearRampToValueAtTime(1.0, startTime + attackTime); // Ramp up to 1.0
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + noteDuration);
+
+      // Connect through filter & envelope -> controllable gain -> master
+      osc.connect(filter).connect(gain).connect(bassGainNode);
+      osc.start(startTime);
+      osc.stop(startTime + noteDuration + 0.02);
+
+      intervalIDs.push(setTimeout(loopBass, pulseIntervalMs));
+    }
+
+    function loopMelody() {
+        if (!audioCtx || audioCtx.state === 'closed' || !melodyGainNode) return; // Check gain node
+
+        const scale = settings.melodyScale.split(',').map(Number); // Parse scale from settings
+        const numPulses = 6 + Math.floor(Math.random() * 7);
+        const baseNote = scale[Math.floor(Math.random() * scale.length)];
+        const pulseDuration = parseFloat(settings.melodyPulseDur);
+
+        const sixteenthNoteDurationMs = msPerBeat / 4;
+        const pulseInterval = (sixteenthNoteDurationMs * 2) / 1000;
+        const cycleDurationMs = 8 * msPerBeat;
+
+        for (let i = 0; i < numPulses; i++) {
+            const t = audioCtx.currentTime + i * pulseInterval;
+            if (t > audioCtx.currentTime + cycleDurationMs / 1000 - pulseDuration) break;
+
+            const freqMultiplier = Math.random() > 0.7 ? (Math.random() > 0.5 ? 1.5 : 0.66) : 1;
+            const note = baseNote * freqMultiplier;
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain(); // Envelope gain
+            const filter = audioCtx.createBiquadFilter();
+
+            osc.type = settings.melodyOscType;
+            filter.type = "lowpass";
+            // TODO: Update live audio parameter
+            filter.frequency.value = settings.melodyFiltFreq;
+            filter.Q.value = settings.melodyFiltQ;
+
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(1.0, t + 0.01); // Ramp up to 1.0 (fast attack)
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + pulseDuration);
+
+            // Connect through filter & envelope -> controllable gain -> master
+            osc.connect(filter).connect(gain).connect(melodyGainNode);
+            osc.start(t);
+            osc.stop(t + pulseDuration + 0.02);
+        }
+        intervalIDs.push(setTimeout(loopMelody, cycleDurationMs));
+    }
+
+    function loopGranularCloud() {
+        if (!audioCtx || audioCtx.state === 'closed' || !granularGainNode) return; // Check gain node
+
+        // Use settings object
+        const baseGrainInterval = settings.grainInterval / 1000; // Convert ms to s
+        const jitter = settings.grainJitter / 1000; // Convert ms to s
+        const minGrainDur = settings.grainMinDur / 1000;
+        const maxGrainDur = settings.grainMaxDur / 1000;
+        const minGrainFreq = settings.grainMinFreq;
+        const maxGrainFreq = settings.grainMaxFreq;
+        const grainOscType = settings.grainOscType;
+        // Individual grain gain comes from settings, before overall granularGainNode
+        const grainGainValue = settings.granularVolume;
+
+        let densityFactor = 1.0;
+        // --- Apply Seismic Mapping ---
+        if (settings.mappingEnabled && quakeInfo) {
+             let sourceValue = 0;
+             if (settings.mapSourceParam === 'mag' && quakeInfo.mag) {
+                 sourceValue = quakeInfo.mag - 6.0; // Use magnitude relative to 6.0
+             } // Add 'else if' for depth etc. if needed
+
+             const intensity = settings.mapIntensity;
+
+            // Apply mapping based on target parameter
+            switch (settings.mapTargetParam) {
+                case 'density':
+                     densityFactor = Math.max(0.1, 1.0 + sourceValue * intensity);
+                     break;
+                // TODO: Add cases for other target parameters (pitch_range, duration, volume etc.)
+                // Example for pitch range:
+                // case 'pitch_range':
+                //    const baseRange = settings.grainMaxFreq - settings.grainMinFreq;
+                //    const modulatedRange = baseRange * (1 + sourceValue * intensity * 0.5); // Modulate range
+                //    minGrainFreq = Math.max(20, settings.grainMinFreq - (modulatedRange - baseRange)/2);
+                //    maxGrainFreq = minGrainFreq + modulatedRange;
+                //    break;
+                 case 'volume':
+                    // Apply modulation to the *overall* granular gain node, not individual grains here
+                    // This would need to happen outside the grain creation loop, maybe on a slower timer
+                    // Or, modify grainGainValue here, but be careful with scaling
+                     // grainGainValue = settings.granularVolume * Math.max(0.1, 1.0 + sourceValue * intensity);
+                     break;
+                 // Add other cases...
+            }
+        }
+        // --- End Seismic Mapping ---
+
+        const actualGrainInterval = Math.max(0.005, baseGrainInterval / densityFactor); // Min 5ms interval
+
+        const now = audioCtx.currentTime;
+        const grainDur = minGrainDur + Math.random() * (maxGrainDur - minGrainDur);
+        const grainFreq = minGrainFreq + Math.random() * (maxGrainFreq - minGrainFreq);
+        const startTime = now;
+
+        const grainOsc = audioCtx.createOscillator();
+        grainOsc.type = grainOscType;
+        grainOsc.frequency.value = grainFreq;
+
+        const grainEnv = audioCtx.createGain(); // Envelope gain
+        grainEnv.gain.setValueAtTime(0, startTime);
+        // Ramp up to 1.0 - actual volume controlled by granularGainNode
+        grainEnv.gain.linearRampToValueAtTime(1.0, startTime + grainDur * 0.1);
+        grainEnv.gain.setValueAtTime(1.0, startTime + grainDur * 0.9);
+        grainEnv.gain.linearRampToValueAtTime(0, startTime + grainDur);
+
+        // Connect osc -> envelope -> controllable gain -> master
+        grainOsc.connect(grainEnv).connect(granularGainNode);
+        grainOsc.start(startTime);
+        grainOsc.stop(startTime + grainDur + 0.01);
+
+        const nextGrainTimeMs = (actualGrainInterval + (Math.random() - 0.5) * jitter * 2) * 1000;
+        granularTimeoutId = setTimeout(loopGranularCloud, Math.max(5, nextGrainTimeMs)); // Min 5ms delay
+    }
+
+    // --- Core Start/Stop Logic (Modified for Component Gain Nodes) ---
+    async function startSonification() {
+        if (audioCtx) { console.log("Sonification already running."); return; }
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+            // Create Master Gain
+            masterGain = audioCtx.createGain();
+            masterGain.gain.value = settings.masterVolume;
+            masterGain.connect(audioCtx.destination);
+
+            // --- Create Component Gain Nodes ---
+            seismicGainNode = audioCtx.createGain();
+            bassGainNode = audioCtx.createGain();
+            melodyGainNode = audioCtx.createGain();
+            granularGainNode = audioCtx.createGain();
+
+            // Set initial volumes from settings
+            seismicGainNode.gain.value = settings.seismicVolume;
+            bassGainNode.gain.value = settings.bassVolume;
+            melodyGainNode.gain.value = settings.melodyVolume;
+            granularGainNode.gain.value = settings.granularVolume;
+
+            // Connect component gains to master gain
+            seismicGainNode.connect(masterGain);
+            bassGainNode.connect(masterGain);
+            melodyGainNode.connect(masterGain);
+            granularGainNode.connect(masterGain);
+            // --- End Component Gain Node Setup ---
+
+
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            infoDiv.innerHTML = `Fetching seismic data... <img src="https://cdnjs.cloudflare.com/ajax/libs/galleriffic/2.0.1/css/loader.gif" alt="loading" style="width:16px; vertical-align:middle;">`;
+
+            const event = await fetchLatestEvent();
+            if (!event) {
+                infoDiv.textContent = "No recent M6+ seismic events found in the last 30 days.";
+                stopSonification(); return;
+            }
+            quakeInfo = {
+                place: event.properties.place,
+                mag: event.properties.mag,
+                time: new Date(event.properties.time).toISOString(),
+                usgs: `https://earthquake.usgs.gov/earthquakes/eventpage/${event.id}/executive`
+                // TODO: Potentially fetch depth here if available and needed for mapping
+            };
+            infoDiv.innerHTML = `Sonifying: ${quakeInfo.place}, M${quakeInfo.mag}, ${quakeInfo.time}<br>... (Fetching waveform...)`; // Simplified
+            const seed = await fetchMiniSEED(quakeInfo.time);
+            infoDiv.innerHTML = `Sonifying: ${quakeInfo.place}, M${quakeInfo.mag}, ${quakeInfo.time}<br>... (Processing waveform...)`; // Simplified
+            const samples = parseMiniSEED(seed);
+            waveformBuffer = buildWaveformBuffer(samples);
+            infoDiv.innerHTML = `Sonifying: ${quakeInfo.place}, M${quakeInfo.mag}, ${quakeInfo.time}<br><a href="${quakeInfo.usgs}" target="_blank">USGS Data</a> | <a class="seismic-link" href="https://allshookup.org/seismic-field.html" target="_blank">Global M6+</a> | (Playing...)`; // Final info
+
+            const loop = () => {
+                if (!audioCtx) return;
+                playWaveform();
+                intervalIDs.forEach(id => clearTimeout(id)); intervalIDs = [];
+                clearTimeout(granularTimeoutId); granularTimeoutId = null;
+                loopAmbient();
+                loopTimer = setTimeout(loop, waveformBuffer.duration * 1000 + 1000);
+            };
+            loop();
+        } catch (error) {
+            console.error("Error during sonification startup:", error);
+            infoDiv.textContent = `Error: ${error.message}`;
+            stopSonification();
+        }
+    }
+
+    function stopSonification() {
+        clearTimeout(loopTimer); loopTimer = null;
+        intervalIDs.forEach(id => clearTimeout(id)); intervalIDs = [];
+        clearTimeout(granularTimeoutId); granularTimeoutId = null;
+
+        if (audioCtx) {
+            try {
+                if (masterGain && masterGain.gain) {
+                    masterGain.gain.cancelScheduledValues(audioCtx.currentTime);
+                    masterGain.gain.setValueAtTime(masterGain.gain.value, audioCtx.currentTime);
+                    masterGain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.5);
+                }
+                // Disconnect component nodes on stop? Optional, closing context handles it.
+                // seismicGainNode?.disconnect(); bassGainNode?.disconnect(); // etc.
+
+                setTimeout(() => {
+                    if (audioCtx && audioCtx.state !== 'closed') {
+                        audioCtx.close().then(() => {
+                            console.log("AudioContext closed.");
+                            audioCtx = null; masterGain = null;
+                            seismicGainNode = null; bassGainNode = null; melodyGainNode = null; granularGainNode = null; // Nullify component nodes
+                            startBtn.disabled = false; stopBtn.disabled = true;
+                            infoDiv.textContent = "Sonification stopped.";
+                        }).catch(e => { /* ... error handling ... */ });
+                    } else { /* ... UI update ... */ }
+                }, 600);
+            } catch (error) { /* ... error handling ... */ }
+        } else { /* ... UI update ... */ }
+          // Explicitly update UI state if already stopped or error occurred
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+          if (!infoDiv.textContent.includes("Error")) {
+              infoDiv.textContent = "Sonification stopped.";
+          }
+    }
+
+    // --- UI Initialization and Event Handlers ---
+    function updateValueDisplay(controlId, value) {
+        const display = valueDisplays[controlId];
+        if (display) {
+            // Special formatting for certain values
+            if (controlId === 'melodyScale') {
+                 display.textContent = controls.melodyScale.options[controls.melodyScale.selectedIndex].text.split(' ')[0]; // Show scale name part
+            } else if (['bassAttack', 'bassDecay', 'melodyPulseDur'].includes(controlId)){
+                 display.textContent = parseFloat(value).toFixed(3); // Show seconds with precision
+            } else if (['grainInterval', 'grainJitter', 'grainMinDur', 'grainMaxDur'].includes(controlId)){
+                 display.textContent = value + ' ms'; // Show ms
+            } else if (['bassFreq', 'bassFiltFreq', 'grainMinFreq', 'grainMaxFreq'].includes(controlId)){
+                 display.textContent = parseFloat(value).toFixed(1) + ' Hz';
+            } else if (controlId === 'bassOscType' || controlId === 'melodyOscType' || controlId === 'grainOscType') {
+                 display.textContent = value;
+            }
+            else {
+                display.textContent = parseFloat(value).toFixed(controlId.toLowerCase().includes('volume') || controlId.toLowerCase().includes('q') || controlId.toLowerCase().includes('intensity') ? 2 : 0);
+            }
+        }
+    }
+
+    function initializeUI() {
+        // Check if loaded settings exist and override defaults
+        if (typeof window.savedSettings === 'object' && window.savedSettings !== null) {
+            console.log("Applying saved settings...");
+            // Be careful merging - ensure all keys exist in saved settings or handle defaults
+            settings = { ...settings, ...window.savedSettings };
+             // Mute/Solo state shouldn't persist directly like this usually
+             settings.muteState = { seismic: false, bass: false, melody: false, granular: false };
+             settings.soloTarget = null;
+        }
+
+        // Set initial control values from the 'settings' object
+        for (const key in controls) {
+            if (controls.hasOwnProperty(key) && settings.hasOwnProperty(key)) {
+                const control = controls[key];
+                const value = settings[key];
+                if (control.type === 'checkbox') {
+                    control.checked = value;
+                } else {
+                    control.value = value;
+                }
+                updateValueDisplay(key, value); // Update display spans
+            }
+        }
+         msPerBeat = (60 / settings.masterBPM) * 1000; // Init BPM calculation
+    }
+
+    function addEventListeners() {
+        startBtn.onclick = startSonification;
+        stopBtn.onclick = stopSonification;
+        controls.resetButton.onclick = resetSettings;
+        controls.saveButton.onclick = saveSettingsToFile;
+
+        // Add listeners for all controls
+        for (const key in controls) {
+            if (controls.hasOwnProperty(key) && key !== 'resetButton' && key !== 'saveButton') {
+                const control = controls[key];
+                const eventType = (control.type === 'range' || control.type === 'number') ? 'input' : 'change';
+
+                control.addEventListener(eventType, (e) => {
+                    let value = e.target.value;
+                    if (control.type === 'checkbox') {
+                        value = e.target.checked;
+                    } else if (control.type !== 'select-one' && control.type !== 'text') { // Keep select value as string
+                        value = parseFloat(value); // Convert sliders/numbers
+                    }
+
+                    settings[key] = value; // Update settings object
+                    updateValueDisplay(key, value); // Update display span
+
+                    // --- Real-time Audio Updates ---
+                    if (audioCtx && audioCtx.state === 'running') {
+                        switch(key) {
+                            case 'masterVolume': if(masterGain) masterGain.gain.value = value; break;
+                            case 'masterBPM': msPerBeat = (60 / value) * 1000; break; // Recalculate msPerBeat
+                            case 'seismicVolume': if(seismicGainNode) seismicGainNode.gain.value = value; break;
+                            case 'bassVolume': if(bassGainNode) bassGainNode.gain.value = value; break;
+                            case 'melodyVolume': if(melodyGainNode) melodyGainNode.gain.value = value; break;
+                            case 'granularVolume': if(granularGainNode) granularGainNode.gain.value = value; break;
+                            // Add more cases here for filter freqs, Q, grain params etc.
+                            // Example: case 'bassFiltFreq': // Needs access to the filter node instance break;
+                            // TODO: Implement real-time updates for nested audio params if needed.
+                            // This might require accessing nodes created inside the loops,
+                            // which is tricky, or applying global changes where appropriate.
+                            // For now, many changes will only take effect on the next loop iteration.
+                        }
+                    }
+                });
+            }
+        }
+
+        // TODO: Add Mute/Solo button listeners
+        // document.querySelectorAll('.mute-btn').forEach(btn => { ... });
+        // document.querySelectorAll('.solo-btn').forEach(btn => { ... });
+    }
+
+    function resetSettings() {
+        // Create a new default settings object to reset to
+         const defaultSettings = { masterVolume: 0.6, masterBPM: 369, seismicVolume: 0.8, bassVolume: 0.08, melodyVolume: 0.05, granularVolume: 0.04, bassOscType: 'square', bassFreq: 41.2, bassFiltFreq: 160, bassFiltQ: 1, bassAttack: 0.01, bassDecay: 0.1, melodyOscType: 'triangle', melodyScale: '73.5,82.5,98,110,147,165', melodyFiltFreq: 400, melodyFiltQ: 2, melodyPulseDur: 0.05, grainInterval: 40, grainJitter: 20, grainMinDur: 30, grainMaxDur: 100, grainMinFreq: 35, grainMaxFreq: 120, grainOscType: 'sine', mappingEnabled: true, mapSourceParam: 'mag', mapTargetParam: 'density', mapIntensity: 0.5 };
+         settings = { ...defaultSettings }; // Assign new object
+         initializeUI(); // Re-initialize UI controls to reflect the reset settings
+
+         // Apply reset settings to live audio if running
+         if (audioCtx && audioCtx.state === 'running') {
+              if(masterGain) masterGain.gain.value = settings.masterVolume;
+              msPerBeat = (60 / settings.masterBPM) * 1000;
+              if(seismicGainNode) seismicGainNode.gain.value = settings.seismicVolume;
+              if(bassGainNode) bassGainNode.gain.value = settings.bassVolume;
+              if(melodyGainNode) melodyGainNode.gain.value = settings.melodyVolume;
+              if(granularGainNode) granularGainNode.gain.value = settings.granularVolume;
+              // TODO: Add resets for other live parameters if they were implemented
+         }
+         console.log("Settings reset to defaults.");
+    }
+
+    function saveSettingsToFile() {
+        console.log("Saving settings...");
+        try {
+            const currentHtml = document.documentElement.outerHTML;
+            const settingsJson = JSON.stringify(settings, null, 2); // Pretty print JSON
+
+            // Find the placeholder comment or create one if it doesn't exist
+            const settingsPlaceholderComment = '<!-- Load Saved Settings (if they exist) -->';
+            const settingsScriptBlock = `<script>\n  window.savedSettings = ${settingsJson};\n<\/script>`; // Note escaped /
+
+            let modifiedHtml;
+            if (currentHtml.includes(settingsPlaceholderComment)) {
+                 modifiedHtml = currentHtml.replace(settingsPlaceholderComment, settingsScriptBlock);
+            } else {
+                // If placeholder missing, inject before the main script tag (less ideal)
+                const scriptTagStart = '<script>'; // Find the start of the main script
+                const insertionPoint = currentHtml.lastIndexOf(scriptTagStart);
+                 if (insertionPoint > -1) {
+                    modifiedHtml = currentHtml.slice(0, insertionPoint) + settingsScriptBlock + '\n' + currentHtml.slice(insertionPoint);
+                 } else {
+                     // Fallback: append before </body>
+                     modifiedHtml = currentHtml.replace('</body>', settingsScriptBlock + '\n</body>');
+                 }
+            }
+
+
+            const blob = new Blob([modifiedHtml], { type: 'text/html' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'seismic_synth_settings.html';
+            document.body.appendChild(link); // Required for FF
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+            console.log("Settings HTML file download initiated.");
+
+        } catch (error) {
+            console.error("Error saving settings to file:", error);
+            alert("Failed to save settings.");
+        }
+    }
+
+    // --- Initial Run ---
+    document.addEventListener('DOMContentLoaded', () => {
+        initializeUI();
+        addEventListeners();
+    });
+
+    window.addEventListener('beforeunload', stopSonification);
+
+  </script>
+</body>
+</html>
