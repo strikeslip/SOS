@@ -1,0 +1,464 @@
+<!--
+[SOS - Sounds Of Seismic]
+https://sos.allshookup.org/
+Copyright (c) [02025] [SHOOK aka D.V.R.]
+
+SOS is free software: you can redistribute it and/or modify
+it under the terms of the MIT License (https://opensource.org/license/mit)
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SEISFLOW</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+ body {
+    font-family: 'Inter', sans-serif;
+    background: #101015; /* From seis.html */
+    color: #e0e0e0; /* From seis.html */
+    text-align: center;
+    padding: 40px 20px;
+    line-height: 1.6; /* From seis.html */
+}
+h1 {
+    font-size: 2.2em;
+    margin-bottom: 15px;
+    color: #ff6f00; /* Orange accent from seis.html */
+    font-weight: 600;
+    letter-spacing: 1px;
+}
+button {
+    background: #ff6f00; /* Match H1 from seis.html */
+    border: none;
+    color: #101015; /* From seis.html */
+    font-size: 18px;
+    font-weight: 600;
+    padding: 12px 28px; /* From seis.html */
+    border-radius: 8px;
+    cursor: pointer;
+    margin: 10px 10px; /* From seis.html */
+    transition: background-color 0.2s ease, transform 0.1s ease;
+}
+button:hover {
+    background: #ff8f33; /* Lighter orange from seis.html */
+}
+button:active {
+    transform: scale(0.98); /* From seis.html */
+}
+button:disabled {
+    background: #555;
+    color: #888;
+    cursor: not-allowed;
+}
+.info {
+    margin-top: 30px;
+    font-size: 0.95em;
+    color: #ccc;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.info strong {
+    color: #ffaa00; /* Highlight color for data points from seis.html */
+}
+.info a {
+    color: #66aaff; /* Link color from seis.html */
+    text-decoration: none;
+}
+.info a:hover {
+    text-decoration: underline;
+}
+.status-line { /* Style for individual lines in status from seis.html */
+    display: block;
+    margin-bottom: 3px;
+}
+</style>
+</head>
+<body>
+<h1>SEISFLOW</h1>
+<div>
+  <button id="startButton">Start</button>
+  <button id="stopButton" disabled>Stop</button>
+</div>
+<div id="eventInfo" class="info">Waiting for seismic data…</div>
+
+<script>
+/*──────────────── helpers ────────────────*/
+const ramp = (param, val, at, ms = 4) => {
+  param.cancelScheduledValues(at);
+  param.linearRampToValueAtTime(val, at + ms / 1000);
+};
+const chroma = (steps, base = 440) => base * Math.pow(2, steps / 12);
+
+/*──────────────── globals ────────────────*/
+let audioCtx = null;
+let busIn, dc, limiter, duck;      // bus nodes
+let intervalIDs = [];
+let loopTimer = null;
+let waveformBuffer = null;
+let padBuffer, filterNode, revOut, grainTimer;
+
+/*──────────────── data fetch & convert ────────────────*/
+async function fetchLatestEvent() {
+  const end = new Date().toISOString();
+  const start = new Date(Date.now() - 30 * 864e5).toISOString();
+  const url =
+    `https://earthquake.usgs.gov/fdsnws/event/1/query?` +
+    `format=geojson&starttime=${start}&endtime=${end}&minmagnitude=6.0&orderby=time`; // Added orderby=time
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`USGS Event Fetch failed: ${response.status}`);
+  const data = await response.json();
+  if (!data.features || data.features.length === 0) {
+      throw new Error('No recent M6+ events found.');
+  }
+  return data.features[0];
+}
+async function fetchMiniSEED(t) {
+  const duration = 60;
+  const end = new Date(new Date(t).getTime() + duration * 1000).toISOString();
+  const url =
+    `https://service.iris.edu/fdsnws/dataselect/1/query?` +
+    `net=IU&sta=ANMO&loc=00&cha=BHZ&starttime=${t}&endtime=${end}&format=miniseed`;
+  return await (await fetch(url)).arrayBuffer();
+}
+const normalize = arr => {
+  const max = Math.max(...arr.map(Math.abs)) || 1;
+  return arr.map(x => x / max);
+};
+function parseMiniSEED(buf) {
+  // A simplified parser, assumes 512-byte records and STEIM-1 is not used.
+  // This is less robust than the SEIS.html one but kept per instructions.
+  const dv = new DataView(buf);
+  const numSamples = dv.getInt16(46, false); // Big-endian
+  const dataOffset = 64; // Common for data records
+  if (numSamples > 0 && buf.byteLength >= dataOffset + numSamples * 4) {
+      return normalize([...new Int32Array(buf.slice(dataOffset, dataOffset + numSamples * 4))]);
+  }
+  // Fallback for different record structure if needed.
+  const n = dv.getInt32(24, true); // Little-endian, might be in blockette
+  if (n > 0 && buf.byteLength >= 48 + n * 4) {
+      return normalize([...new Int32Array(buf.slice(48, 48 + n * 4))]);
+  }
+  throw new Error("Could not parse MiniSEED sample count.");
+}
+function resample(input, newLen) {
+  const out = new Float32Array(newLen);
+  const factor = (input.length - 1) / (newLen - 1);
+  for (let i = 0; i < newLen; i++) {
+    const idx = i * factor;
+    const i0 = idx | 0;
+    const frac = idx - i0;
+    const i1 = Math.min(i0 + 1, input.length - 1);
+    out[i] = (1 - frac) * input[i0] + frac * input[i1];
+  }
+  return out;
+}
+function buildWaveform(samples) {
+  const sr = 44100;
+  const fadeLen = Math.floor(0.2 * sr);
+  const stretched = resample(samples, 8 * sr);
+  for (let i = 0; i < fadeLen; i++) {
+    const win = (1 - Math.cos((Math.PI * i) / fadeLen)) * 0.5;
+    stretched[i] *= win;
+    stretched[stretched.length - 1 - i] *= win;
+  }
+  const buf = audioCtx.createBuffer(1, stretched.length, sr);
+  buf.copyToChannel(stretched, 0);
+  return buf;
+}
+
+/*──────────────── René‑Hell granular cloud ────────────────*/
+const saw = x => 2 * (x - Math.floor(x + 0.5));
+function makePadBuffer() {
+  const fs = audioCtx.sampleRate;
+  const len = 2 * fs;
+  const buf = audioCtx.createBuffer(1, len, fs);
+  const ch = buf.getChannelData(0);
+  const f1 = 110;
+  const f2 = f1 * Math.pow(2, 5 / 1200); // +5 cents
+  for (let i = 0; i < len; i++) {
+    const t = i / fs;
+    ch[i] = 0.03 * (saw(t * f1) + saw(t * f2)); // -2 dB
+  }
+  return buf;
+}
+function simpleReverb(ctx) {
+  const input = ctx.createGain();
+  const output = ctx.createGain();
+  [0.025, 0.033, 0.045, 0.06].forEach(dt => {
+    const d = ctx.createDelay();
+    d.delayTime.value = dt;
+    const fb = ctx.createGain();
+    fb.gain.value = 0.65;
+    input.connect(d);
+    d.connect(fb).connect(d);
+    d.connect(output);
+  });
+  input.connect(output);
+  return { input, output };
+}
+function startGranularCloud() {
+  padBuffer = makePadBuffer();
+
+  filterNode = audioCtx.createBiquadFilter();
+  filterNode.type = 'lowpass';
+  filterNode.frequency.setValueAtTime(4800, audioCtx.currentTime);
+  filterNode.frequency.linearRampToValueAtTime(
+    800,
+    audioCtx.currentTime + 120
+  );
+
+  const { input: revIn, output } = simpleReverb(audioCtx);
+  revOut = output;
+  filterNode.connect(revIn);
+  revOut.connect(busIn);
+
+  const density = 18;
+  const lookAhead = 100; // ms
+  const schedAhead = 0.25; // s
+  let nextTime = audioCtx.currentTime + 0.05;
+
+  grainTimer = setInterval(() => {
+    while (nextTime < audioCtx.currentTime + schedAhead) {
+      scheduleGrain(nextTime);
+      nextTime += 1 / density;
+    }
+  }, lookAhead);
+}
+function scheduleGrain(t) {
+  const dur = 0.12 + Math.random() * 0.18;
+  const offset = Math.random() * (padBuffer.duration - dur);
+  const src = audioCtx.createBufferSource();
+  src.buffer = padBuffer;
+  src.playbackRate.value = 0.97 + Math.random() * 0.06;
+
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0, t);
+  ramp(g.gain, 1, t, 2); // 2 ms fade‑in
+  g.gain.linearRampToValueAtTime(0, t + dur - 0.003); // 3 ms fade‑out
+
+  src.connect(g).connect(filterNode);
+  src.start(t, offset, dur);
+  src.stop(t + dur + 0.02);
+}
+function stopGranularCloud() {
+  clearInterval(grainTimer);
+  filterNode?.disconnect();
+  revOut?.disconnect();
+}
+
+/*──────────────── Pop layers (timers identical to v5) ────────────────*/
+const chordSeq = [
+  [0, 4, 7],
+  [7, 11, 14],
+  [9, 12, 16],
+  [5, 9, 12]
+];
+let chordIndex = 0;
+
+function loopBass() {
+  const triad = chordSeq[chordIndex];
+  chordIndex = (chordIndex + 1) % chordSeq.length;
+  const now = audioCtx.currentTime;
+  triad.forEach((st, i) => {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    const t0 = now + i * 0.05;
+    osc.frequency.value = chroma(st - 24);
+    osc.type = 'sawtooth';
+    g.gain.setValueAtTime(0, t0);
+    ramp(g.gain, 0.045, t0);
+    g.gain.linearRampToValueAtTime(0, t0 + 4);
+    osc.connect(g).connect(busIn);
+    osc.start(t0);
+    osc.stop(t0 + 4);
+  });
+  intervalIDs.push(setTimeout(loopBass, 8000));
+}
+
+function loopMelody() {
+  const arp = [0, 4, 7, 12];
+  for (let i = 0; i < 4; i++) {
+    const t = audioCtx.currentTime + i * 1.2;
+    const st = arp[i % 4] + 12;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.frequency.value = chroma(st);
+    osc.type = 'triangle';
+    g.gain.setValueAtTime(0, t);
+    ramp(g.gain, 0.035, t);
+    g.gain.linearRampToValueAtTime(0, t + 0.8);
+    osc.connect(g).connect(busIn);
+    osc.start(t);
+    osc.stop(t + 0.8);
+  }
+  intervalIDs.push(setTimeout(loopMelody, 4800));
+}
+
+function loopKick() {
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(120, t);
+  osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+  ramp(g.gain, 0.9, t, 3);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+  osc.connect(g).connect(busIn);
+  osc.start(t);
+  osc.stop(t + 0.6);
+  intervalIDs.push(setTimeout(loopKick, 1000));
+}
+
+function loopNoise() {
+  const len = 2 * audioCtx.sampleRate;
+  const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 900;
+
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0, audioCtx.currentTime);
+  ramp(g.gain, 0.003, audioCtx.currentTime);
+  g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 10);
+
+  src.connect(lp).connect(g).connect(busIn);
+  src.start();
+  src.stop(audioCtx.currentTime + 10);
+
+  intervalIDs.push(setTimeout(loopNoise, 10000));
+}
+
+/*──────────────── Quake playback (into busIn) ────────────────*/
+function playWaveform() {
+  if (!waveformBuffer) return;
+  const src = audioCtx.createBufferSource();
+  src.buffer = waveformBuffer;
+
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = 'bandpass';
+  bp.frequency.value = 600;
+  bp.Q.value = 1;
+
+  src.connect(bp).connect(busIn);
+
+  const t = audioCtx.currentTime;
+  duck.gain.cancelScheduledValues(t);
+  duck.gain.setTargetAtTime(0.75, t, 0.02);
+  duck.gain.setTargetAtTime(1, t + 0.8, 0.25);
+
+  src.start();
+  src.stop(t + 8);
+}
+
+/*──────────────── UI & main control ────────────────*/
+const startBtn = document.getElementById('startButton');
+const stopBtn = document.getElementById('stopButton');
+const infoDiv = document.getElementById('eventInfo');
+
+async function startSonification() {
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.resume();
+
+    /* Main bus: sources → busIn → dc → limiter → duck → destination */
+    busIn = audioCtx.createGain();
+    busIn.gain.value = 0.85;
+
+    /* Keep‑alive constant (‑100 dB) so Chrome never suspends */
+    const keep = audioCtx.createConstantSource();
+    keep.offset.value = 1e-5;
+    keep.start();
+    keep.connect(busIn);
+
+    dc = audioCtx.createBiquadFilter();
+    dc.type = 'highpass';
+    dc.frequency.value = 20;
+
+    limiter = audioCtx.createDynamicsCompressor();
+    limiter.threshold.value = -6;
+    limiter.knee.value = 6;
+    limiter.ratio.value = 4;
+
+    duck = audioCtx.createGain();
+    duck.gain.value = 1;
+
+    busIn.connect(dc).connect(limiter).connect(duck).connect(audioCtx.destination);
+
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    infoDiv.textContent = 'Fetching latest earthquake data...';
+
+    /* Fetch quake info */
+    const evt = await fetchLatestEvent();
+    const quakeInfo = {
+      place: evt.properties.place || "Unknown location",
+      mag: evt.properties.mag || 0,
+      depth: evt.geometry.coordinates[2] || 0,
+      time: new Date(evt.properties.time).toISOString(),
+      usgs: `https://earthquake.usgs.gov/earthquakes/eventpage/${evt.id}`
+    };
+    
+    // MODIFIED: Update infoDiv with the new format
+    infoDiv.innerHTML = `
+        <span class="status-line">Now Playing: <strong>M${quakeInfo.mag.toFixed(1)}</strong> ${quakeInfo.place}</span>
+        <span class="status-line">Depth: <strong>${quakeInfo.depth.toFixed(1)} km</strong>, Time: ${new Date(quakeInfo.time).toLocaleString()}</span>
+        <span class="status-line"><a href="${quakeInfo.usgs}" target="_blank">View on USGS</a> | Station: IU.ANMO</span>
+    `;
+
+    /* Build quake buffer */
+    const seed = await fetchMiniSEED(quakeInfo.time);
+    waveformBuffer = buildWaveform(parseMiniSEED(seed));
+
+    /* Start layers */
+    startGranularCloud();
+    loopBass();
+    loopMelody();
+    loopNoise();
+    loopKick();
+    playWaveform();
+
+    /* Recursive timer exactly like v5 */
+    (function mainLoop() {
+      playWaveform();
+      loopTimer = setTimeout(mainLoop, 8800);
+    })();
+  } catch (error) {
+      console.error("Error during startup:", error);
+      infoDiv.textContent = `Error: ${error.message}`;
+      stopSonification();
+  }
+}
+
+function stopSonification() {
+  clearTimeout(loopTimer);
+  intervalIDs.forEach(clearTimeout);
+  intervalIDs = [];
+  stopGranularCloud();
+  if (audioCtx) {
+      audioCtx.close().then(() => {
+          console.log("AudioContext closed.");
+      });
+      audioCtx = null;
+  }
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  infoDiv.textContent = 'Waiting for seismic data…';
+  waveformBuffer = null;
+}
+
+startBtn.onclick = startSonification;
+stopBtn.onclick = stopSonification;
+</script>
+</body>
+</html>
