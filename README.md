@@ -1,4 +1,4 @@
-![sos.gif]([image-url](https://github.com/SeisSound/SOS/blob/main/.github/workflows/SOS.gif))
+![Image](https://github.com/user-attachments/assets/88059152-b8fa-46fc-a498-8801064b5cc4)
 
 **Sounds Of Seismic (SOS)**
 
