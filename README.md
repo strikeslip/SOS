@@ -9,7 +9,6 @@ Sounds of Seismic (SOS) transforms MiniSEED seismic waveform data into geophysic
 Working Modules;<br>
 [SEISFLOW](https://sos.allshookup.org/flow.html)<br>
 [SEISTRONICA](https://sos.allshookup.org/seis.html)<br>
-[GSN•SOS•UPIC](https://sos.allshookup.org/UPIC.html)<br>
 [M8.8 SYNTH](https://sos.allshookup.org/synths/Kamchatka-8-8-Synth.html)<br>
 [ANNMO SYNTH](https://sos.allshookup.org/synths/ANMO-FM-Synth.html)<br>
 
