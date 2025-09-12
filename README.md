@@ -79,8 +79,8 @@ Sounds of Seismic (SOS) transforms MiniSEED seismic waveform data into geophysic
 
 [Seismic Field](https://allshookup.org/seismic-field.html) - M6+ Global Earthquakes Since 1900<br>
 [Seismic Auditory Display](https://sos.allshookup.org/auditory-display.html) - Ryan McGee<br>
+[StrikeSlip](https://github.com/strikeslip) - SOS Development Github<br>
 [SeismicSounds](https://soundcloud.com/seismicsounds) - SoundCloud<br>
-[StrikeSlip](https://github.com/strikeslip) - SOS Development Github
     
 https://sos.allshookup.org/
 
