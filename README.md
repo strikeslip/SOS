@@ -6,6 +6,7 @@
 Sounds of Seismic (SOS) is an electronica earthwork that continuously translates real-time seismic data into interpretive musical compositions. This digital symphony merges electronic music synthesis with earth science and data art, presenting multiple browser interfaces that render Earth’s vibrational patterns as unique sonic broadcasts. Built with GenAI and open-source web audio standards, SOS transforms complex geophysical data into accessible musical experiences for global audiences.<br><br></div>
 
 **Working Modules**<br>
+[ONE](https://sos.allshookup.org/ONE.html) - Ambient Music for Earthquakes<br>
 [SEISFLOW](https://sos.allshookup.org/flow.html) - Maps seismic wave frequencies to melodic patterns<br>
 [SEISTRONICA](https://sos.allshookup.org/seis.html) - Blends seismic data with classic electronica sounds<br>
 [M8.8 SYNTH](https://sos.allshookup.org/synths/Kamchatka-8-8-Synth.html) - Sonifies the 2025 Kamchatka 8.8-magnitude earthquake<br>
