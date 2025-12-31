@@ -1,0 +1,1645 @@
+<!--
+[SOS - Sounds Of Seismic] - SHADOWZONE Edition v3
+https://sos.allshookup.org/
+Copyright (c) [2025] [SHOOK aka D.V.R.]
+
+Seismic Waveform Electronica
+- Three-layer granular synthesis (Texture/Tone/Rhythm)
+- Harmonic scale quantization
+- Shadow zone visualization with P-wave ray tracing
+- MUZAK mode with floating note status indicator
+- Mobile responsive (iOS/Android)
+
+SOS is free software: MIT License (https://opensource.org/license/mit)
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta charset="UTF-8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>SOS — SHADOWZONE</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        :root {
+            --bg-deep: #06060a;
+            --bg-surface: #0a0a10;
+            --text-primary: #e8e8ec;
+            --text-secondary: #7a7a88;
+            --text-dim: #3a3a48;
+            --accent: #ff6a3d;
+            --accent-dim: #4a2a1a;
+            --shadow-red: #ff4444;
+            --earth-mantle: #1a2a3a;
+            --earth-core: #5a3a2a;
+            --station-green: #4aff9e;
+            --texture-color: #ff6a3d;
+            --tone-color: #4aff9e;
+            --rhythm-color: #4a9eff;
+        }
+        
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            min-height: 100vh;
+            min-height: -webkit-fill-available;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px;
+            padding-top: max(12px, env(safe-area-inset-top));
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 4px;
+        }
+        
+        .title {
+            font-size: clamp(11px, 3vw, 13px);
+            letter-spacing: clamp(3px, 1.5vw, 6px);
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        
+        .subtitle {
+            font-size: clamp(8px, 2vw, 9px);
+            letter-spacing: 2px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+        }
+        
+        .shadowzone-container {
+            width: 100%;
+            aspect-ratio: 16/9;
+            max-height: min(420px, 50vh);
+            background: var(--bg-surface);
+            border-radius: 6px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 80px rgba(255, 68, 68, 0.1);
+            touch-action: manipulation;
+        }
+        
+        #shadowCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        .layer-toggles {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .layer-toggle {
+            padding: 6px 14px;
+            font-size: clamp(8px, 2vw, 9px);
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            border: 1px solid;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: transparent;
+            font-family: inherit;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .layer-toggle.texture { border-color: var(--texture-color); color: var(--texture-color); }
+        .layer-toggle.texture.active { background: var(--texture-color); color: var(--bg-deep); }
+        .layer-toggle.tone { border-color: var(--tone-color); color: var(--tone-color); }
+        .layer-toggle.tone.active { background: var(--tone-color); color: var(--bg-deep); }
+        .layer-toggle.rhythm { border-color: var(--rhythm-color); color: var(--rhythm-color); }
+        .layer-toggle.rhythm.active { background: var(--rhythm-color); color: var(--bg-deep); }
+        
+        .controls-panel {
+            display: flex;
+            gap: 16px;
+            padding: 10px 16px;
+            background: var(--bg-surface);
+            border-radius: 4px;
+            flex-wrap: wrap;
+            justify-content: center;
+            width: 100%;
+            max-width: 500px;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            min-width: 70px;
+        }
+        
+        .control-group label {
+            font-size: clamp(7px, 1.8vw, 8px);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-dim);
+        }
+        
+        .control-group select {
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            border: 1px solid var(--text-dim);
+            padding: 4px 6px;
+            border-radius: 2px;
+            font-family: inherit;
+            font-size: clamp(9px, 2.2vw, 10px);
+            min-width: 70px;
+        }
+        
+        .control-group input[type="range"] { width: 70px; accent-color: var(--accent); }
+        .control-group .value { font-size: clamp(9px, 2.2vw, 10px); color: var(--accent); }
+        
+        .main-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        button.main-btn {
+            background: transparent;
+            border: 1px solid var(--text-dim);
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: clamp(10px, 2.5vw, 11px);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            padding: 10px 24px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-radius: 3px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        
+        button.main-btn:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+            box-shadow: 0 0 20px rgba(255, 106, 61, 0.2);
+        }
+        
+        button.main-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        button.main-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg-deep); }
+        
+        button.freeze-btn.frozen {
+            background: linear-gradient(135deg, #ffaa00, #ff6a3d);
+            border-color: #ffaa00;
+            color: var(--bg-deep);
+            animation: muzakPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes muzakPulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 20px rgba(255, 170, 0, 0.4); }
+            50% { opacity: 0.85; box-shadow: 0 0 30px rgba(255, 170, 0, 0.6); }
+        }
+        
+        .status {
+            text-align: center;
+            font-size: clamp(9px, 2.2vw, 10px);
+            color: var(--text-dim);
+            line-height: 1.8;
+            min-height: 45px;
+            padding: 0 10px;
+        }
+        
+        .status a { color: var(--accent); text-decoration: none; }
+        .status .magnitude { color: var(--shadow-red); font-size: clamp(11px, 2.8vw, 13px); font-weight: 600; }
+        .status .location { color: var(--text-secondary); }
+        
+        .metrics {
+            display: flex;
+            gap: 20px;
+            font-size: clamp(7px, 1.8vw, 8px);
+            color: var(--text-dim);
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .metric { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .metric-value { font-size: clamp(12px, 3vw, 14px); font-weight: 300; }
+        .metric-value.texture { color: var(--texture-color); }
+        .metric-value.tone { color: var(--tone-color); }
+        .metric-value.rhythm { color: var(--rhythm-color); }
+        .metric-label { text-transform: uppercase; letter-spacing: 1px; }
+        
+        .loading .shadowzone-container { animation: glow 2s ease-in-out infinite; }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 40px rgba(255, 68, 68, 0.1); }
+            50% { box-shadow: 0 0 80px rgba(255, 68, 68, 0.2); }
+        }
+        
+        @media (max-width: 480px) {
+            body { padding: 8px; }
+            .container { gap: 10px; }
+            .controls-panel { gap: 12px; padding: 8px 12px; }
+            .control-group { min-width: 60px; }
+            .control-group input[type="range"] { width: 60px; }
+            button.main-btn { padding: 8px 18px; }
+            .metrics { gap: 16px; }
+        }
+        
+        @media (max-height: 500px) and (orientation: landscape) {
+            .shadowzone-container { max-height: 45vh; }
+            .container { gap: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">SHADOWZONE</div>
+            <div class="subtitle">Seismic Waveform Electronica</div>
+        </div>
+        
+        <div class="shadowzone-container">
+            <canvas id="shadowCanvas"></canvas>
+        </div>
+        
+        <div class="layer-toggles">
+            <button class="layer-toggle texture active" id="toggleTexture">Texture</button>
+            <button class="layer-toggle tone active" id="toggleTone">Tone</button>
+            <button class="layer-toggle rhythm active" id="toggleRhythm">Rhythm</button>
+        </div>
+        
+        <div class="controls-panel" id="controlsPanel">
+            <div class="control-group">
+                <label>Scale</label>
+                <select id="scaleSelect">
+                    <option value="pentatonic" selected>Pentatonic</option>
+                    <option value="minor">Minor</option>
+                    <option value="dorian">Dorian</option>
+                    <option value="harmonic">Harmonic</option>
+                    <option value="fifths">Fifths</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Root</label>
+                <select id="rootSelect">
+                    <option value="55">A1</option>
+                    <option value="73.42">D2</option>
+                    <option value="82.41">E2</option>
+                    <option value="110" selected>A2</option>
+                    <option value="146.83">D3</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label>Stretch</label>
+                <input type="range" id="stretchSlider" min="0.25" max="3" step="0.25" value="1">
+                <span class="value" id="stretchValue">1.0×</span>
+            </div>
+            <div class="control-group">
+                <label>Reverb</label>
+                <input type="range" id="reverbSlider" min="0" max="100" step="5" value="45">
+                <span class="value" id="reverbValue">45%</span>
+            </div>
+        </div>
+        
+        <div class="metrics">
+            <div class="metric">
+                <div class="metric-value texture" id="textureValue">—</div>
+                <div class="metric-label">Texture</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value tone" id="toneValue">—</div>
+                <div class="metric-label">Tone</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value rhythm" id="rhythmValue">—</div>
+                <div class="metric-label">Rhythm</div>
+            </div>
+            <div class="metric">
+                <div class="metric-value" id="filterValue">—</div>
+                <div class="metric-label">Filter</div>
+            </div>
+        </div>
+        
+        <div class="main-controls">
+            <button class="main-btn" id="startBtn">Begin</button>
+            <button class="main-btn freeze-btn" id="freezeBtn" disabled>Muzak</button>
+            <button class="main-btn" id="stopBtn" disabled>End</button>
+        </div>
+        
+        <div class="status" id="status">
+            Shadow zone visualization with three-layer granular synthesis<br>
+            Press Begin to sonify Earth's seismic voice
+        </div>
+    </div>
+
+    <script>
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CONFIGURATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    const CONFIG = {
+        seismicDurationS: 60,
+        sampleRate: 44100,
+        minMagnitude: 6.0,
+        fetchDays: 30,
+        station: { net: "IU", sta: "ANMO", loc: "00", cha: "BHZ" },
+        playbackSpeed: 0.0004,
+        cycleDurationS: 25
+    };
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MUSICAL SCALES
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    const SCALES = {
+        pentatonic: [0, 2, 4, 7, 9],
+        minor: [0, 2, 3, 5, 7, 8, 10],
+        dorian: [0, 2, 3, 5, 7, 9, 10],
+        harmonic: [0, 12, 19, 24, 28, 31, 34, 36],
+        fifths: [0, 7, 14, 21, 28]
+    };
+    
+    const semitonesToRatio = (st) => Math.pow(2, st / 12);
+    const clamp = (val, min, max) => Math.max(min, Math.min(max, val));
+    
+    function quantizeToScale(freq, scale, rootFreq) {
+        const intervals = SCALES[scale] || SCALES.pentatonic;
+        const freqs = [];
+        for (let oct = -3; oct <= 4; oct++) {
+            for (const iv of intervals) {
+                const f = rootFreq * Math.pow(2, oct) * semitonesToRatio(iv);
+                if (f >= 25 && f <= 8000) freqs.push(f);
+            }
+        }
+        let nearest = freqs[0], minDist = Math.abs(freq - nearest);
+        for (const f of freqs) {
+            const dist = Math.abs(freq - f);
+            if (dist < minDist) { minDist = dist; nearest = f; }
+        }
+        return nearest;
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MUSICAL NOTE PARTICLE - Status indicator for MUZAK mode
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    class MusicNoteParticle {
+        constructor(x, y, symbol) {
+            this.x = x;
+            this.y = y;
+            this.symbol = symbol;
+            this.vx = (Math.random() - 0.5) * 0.8;
+            this.vy = -0.5 - Math.random() * 1.2;
+            this.life = 1.0;
+            this.decay = 0.008 + Math.random() * 0.006;
+            this.size = 12 + Math.random() * 8;
+            this.rotation = (Math.random() - 0.5) * 0.3;
+            this.rotationSpeed = (Math.random() - 0.5) * 0.02;
+            this.wobblePhase = Math.random() * Math.PI * 2;
+            this.wobbleSpeed = 0.05 + Math.random() * 0.03;
+        }
+        
+        update() {
+            this.wobblePhase += this.wobbleSpeed;
+            this.x += this.vx + Math.sin(this.wobblePhase) * 0.3;
+            this.y += this.vy;
+            this.vy *= 0.995;
+            this.rotation += this.rotationSpeed;
+            this.life -= this.decay;
+            return this.life > 0;
+        }
+        
+        draw(ctx) {
+            if (this.life <= 0) return;
+            ctx.save();
+            ctx.translate(this.x, this.y);
+            ctx.rotate(this.rotation);
+            ctx.globalAlpha = this.life * 0.9;
+            ctx.font = `${this.size}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowColor = '#ffaa00';
+            ctx.shadowBlur = 10 * this.life;
+            ctx.fillStyle = `rgba(255, ${180 + Math.floor(this.life * 50)}, ${100 + Math.floor(this.life * 50)}, ${this.life})`;
+            ctx.fillText(this.symbol, 0, 0);
+            ctx.restore();
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SHADOW ZONE VISUALIZER - Always animating, MUZAK adds note indicators
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    class ShadowZoneVisualizer {
+        constructor(canvas) {
+            this.canvas = canvas;
+            this.ctx = canvas.getContext('2d');
+            
+            this.coreRatio = 0.545;
+            this.innerCoreRatio = 0.19;
+            this.shadowStart = 103;
+            this.shadowEnd = 142;
+            
+            this.epicenterAngle = -Math.PI / 2;
+            this.stationAngle = this.epicenterAngle + Math.PI * 0.44;
+            this.seismicAmplitude = 0;
+            this.rayCount = 20;
+            
+            // Continuous animation - always runs independently
+            this.animationTime = 0;
+            this.wavefrontSpeed = 0.00111;
+            
+            // MUZAK mode - only controls note indicator display
+            this.isMuzak = false;
+            this.noteParticles = [];
+            this.noteSymbols = ['♪', '♫', '🎵', '🎶'];
+            this.lastNoteSpawn = 0;
+            
+            this.rays = [];
+            this.resize();
+        }
+        
+        resize() {
+            const rect = this.canvas.getBoundingClientRect();
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            this.canvas.width = rect.width * dpr;
+            this.canvas.height = rect.height * dpr;
+            this.ctx.scale(dpr, dpr);
+            
+            this.w = rect.width;
+            this.h = rect.height;
+            this.cx = this.w / 2;
+            this.cy = this.h / 2;
+            this.R = Math.min(this.w, this.h) * 0.38;
+            
+            this.calculateRays();
+        }
+        
+        calculateRays() {
+            this.rays = [];
+            const coreR = this.R * this.coreRatio;
+            
+            for (let i = 0; i < this.rayCount; i++) {
+                const frac = i / (this.rayCount - 1);
+                const takeoff = this.epicenterAngle + (frac - 0.5) * Math.PI * 0.9;
+                this.rays.push(this.traceRay(takeoff, coreR));
+            }
+        }
+        
+        traceRay(takeoff, coreR) {
+            const startX = this.cx + this.R * Math.cos(this.epicenterAngle);
+            const startY = this.cy + this.R * Math.sin(this.epicenterAngle);
+            const points = [{ x: startX, y: startY }];
+            
+            const dirAngle = takeoff + Math.PI;
+            const dirX = Math.cos(dirAngle);
+            const dirY = Math.sin(dirAngle);
+            
+            const rayStart = { x: startX - this.cx, y: startY - this.cy };
+            const a = dirX * dirX + dirY * dirY;
+            const b = 2 * (rayStart.x * dirX + rayStart.y * dirY);
+            const cCore = rayStart.x ** 2 + rayStart.y ** 2 - coreR ** 2;
+            const disc = b * b - 4 * a * cCore;
+            
+            let hitsCore = false;
+            let exitAngle = takeoff;
+            
+            if (disc > 0) {
+                const t1 = (-b - Math.sqrt(disc)) / (2 * a);
+                const t2 = (-b + Math.sqrt(disc)) / (2 * a);
+                
+                if (t1 > 10 && t2 > t1) {
+                    hitsCore = true;
+                    points.push({ x: startX + dirX * t1, y: startY + dirY * t1, type: 'core' });
+                    points.push({ x: startX + dirX * t2, y: startY + dirY * t2, type: 'core' });
+                    
+                    const entryAngle = Math.atan2(points[1].y - this.cy, points[1].x - this.cx);
+                    const exitCoreAngle = Math.atan2(points[2].y - this.cy, points[2].x - this.cx);
+                    exitAngle = exitCoreAngle + (exitCoreAngle - entryAngle) * 0.5;
+                    
+                    points.push({
+                        x: this.cx + this.R * Math.cos(exitAngle),
+                        y: this.cy + this.R * Math.sin(exitAngle)
+                    });
+                }
+            }
+            
+            if (!hitsCore) {
+                const cSurf = rayStart.x ** 2 + rayStart.y ** 2 - this.R ** 2;
+                const discSurf = b * b - 4 * a * cSurf;
+                if (discSurf > 0) {
+                    const t = (-b + Math.sqrt(discSurf)) / (2 * a);
+                    if (t > 10) {
+                        const ex = startX + dirX * t;
+                        const ey = startY + dirY * t;
+                        exitAngle = Math.atan2(ey - this.cy, ex - this.cx);
+                        points.push({ x: ex, y: ey });
+                    }
+                }
+            }
+            
+            let angDist = exitAngle - this.epicenterAngle;
+            while (angDist < 0) angDist += Math.PI * 2;
+            while (angDist > Math.PI * 2) angDist -= Math.PI * 2;
+            if (angDist > Math.PI) angDist = Math.PI * 2 - angDist;
+            const deg = angDist * 180 / Math.PI;
+            
+            return {
+                points,
+                hitsCore,
+                inShadow: deg >= this.shadowStart && deg <= this.shadowEnd,
+                length: this.rayLength(points)
+            };
+        }
+        
+        rayLength(pts) {
+            let len = 0;
+            for (let i = 1; i < pts.length; i++) {
+                len += Math.hypot(pts[i].x - pts[i-1].x, pts[i].y - pts[i-1].y);
+            }
+            return len;
+        }
+        
+        pointOnRay(ray, frac) {
+            const target = ray.length * frac;
+            let traveled = 0;
+            for (let i = 1; i < ray.points.length; i++) {
+                const dx = ray.points[i].x - ray.points[i-1].x;
+                const dy = ray.points[i].y - ray.points[i-1].y;
+                const seg = Math.hypot(dx, dy);
+                if (traveled + seg >= target) {
+                    const t = (target - traveled) / seg;
+                    return { x: ray.points[i-1].x + dx * t, y: ray.points[i-1].y + dy * t };
+                }
+                traveled += seg;
+            }
+            return ray.points[ray.points.length - 1];
+        }
+        
+        setEpicenter(lon, lat) {
+            this.epicenterAngle = -Math.PI / 2 + (lon / 180) * Math.PI * 0.25;
+            this.calculateRays();
+        }
+        
+        setMuzakMode(enabled) {
+            this.isMuzak = enabled;
+            if (enabled) {
+                this.lastNoteSpawn = this.animationTime;
+            }
+        }
+        
+        update(amplitude) {
+            this.seismicAmplitude = clamp(amplitude, 0, 1);
+            
+            // Always advance animation - wavefronts NEVER stop
+            this.animationTime += this.wavefrontSpeed;
+            
+            // MUZAK mode: spawn and update note status indicators
+            if (this.isMuzak) {
+                if (this.animationTime - this.lastNoteSpawn > 0.2 + Math.random() * 0.25) {
+                    this.spawnNote();
+                    this.lastNoteSpawn = this.animationTime;
+                }
+                this.noteParticles = this.noteParticles.filter(p => p.update());
+            }
+        }
+        
+        spawnNote() {
+            const symbol = this.noteSymbols[Math.floor(Math.random() * this.noteSymbols.length)];
+            
+            // Spawn from epicenter (70% chance)
+            if (Math.random() < 0.7) {
+                const ex = this.cx + this.R * Math.cos(this.epicenterAngle);
+                const ey = this.cy + this.R * Math.sin(this.epicenterAngle);
+                this.noteParticles.push(new MusicNoteParticle(
+                    ex + (Math.random() - 0.5) * 20,
+                    ey + (Math.random() - 0.5) * 20,
+                    symbol
+                ));
+            }
+            
+            // Spawn from station (40% chance)
+            if (Math.random() < 0.4) {
+                const sx = this.cx + this.R * Math.cos(this.stationAngle);
+                const sy = this.cy + this.R * Math.sin(this.stationAngle);
+                this.noteParticles.push(new MusicNoteParticle(
+                    sx + (Math.random() - 0.5) * 15,
+                    sy + (Math.random() - 0.5) * 15,
+                    symbol
+                ));
+            }
+        }
+        
+        draw() {
+            const ctx = this.ctx;
+            
+            ctx.fillStyle = '#06060a';
+            ctx.fillRect(0, 0, this.w, this.h);
+            
+            this.drawEarth();
+            this.drawShadowZones();
+            this.drawRays();
+            this.drawWavefronts();
+            this.drawEpicenter();
+            this.drawStation();
+            this.drawLabels();
+            
+            // Draw note indicators when in MUZAK mode
+            if (this.isMuzak) {
+                this.drawNoteParticles();
+            }
+        }
+        
+        drawEarth() {
+            const ctx = this.ctx;
+            
+            const mantleGrad = ctx.createRadialGradient(this.cx, this.cy, 0, this.cx, this.cy, this.R);
+            mantleGrad.addColorStop(0, '#0a1218');
+            mantleGrad.addColorStop(0.5, '#1a2a3a');
+            mantleGrad.addColorStop(1, '#2d4a5a');
+            ctx.fillStyle = mantleGrad;
+            ctx.beginPath();
+            ctx.arc(this.cx, this.cy, this.R, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = '#3d5a6a';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            
+            const coreR = this.R * this.coreRatio;
+            const coreGrad = ctx.createRadialGradient(this.cx, this.cy, 0, this.cx, this.cy, coreR);
+            coreGrad.addColorStop(0, '#8a5a3a');
+            coreGrad.addColorStop(1, '#4a2a1a');
+            ctx.fillStyle = coreGrad;
+            ctx.beginPath();
+            ctx.arc(this.cx, this.cy, coreR, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = `rgba(255, 150, 100, ${0.3 + this.seismicAmplitude * 0.3})`;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            const innerR = this.R * this.innerCoreRatio;
+            ctx.fillStyle = '#6a4a2a';
+            ctx.beginPath();
+            ctx.arc(this.cx, this.cy, innerR, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        drawShadowZones() {
+            const ctx = this.ctx;
+            const startRad = this.shadowStart * Math.PI / 180;
+            const endRad = this.shadowEnd * Math.PI / 180;
+            
+            for (const side of [1, -1]) {
+                const s = this.epicenterAngle + side * startRad;
+                const e = this.epicenterAngle + side * endRad;
+                
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+                ctx.beginPath();
+                ctx.moveTo(this.cx, this.cy);
+                ctx.arc(this.cx, this.cy, this.R * 1.3, side === 1 ? s : e, side === 1 ? e : s);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.strokeStyle = `rgba(255, 68, 68, ${0.5 + this.seismicAmplitude * 0.3})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(this.cx, this.cy, this.R, side === 1 ? s : e, side === 1 ? e : s);
+                ctx.stroke();
+            }
+        }
+        
+        drawRays() {
+            const ctx = this.ctx;
+            
+            for (const ray of this.rays) {
+                if (ray.points.length < 2) continue;
+                
+                ctx.beginPath();
+                ctx.moveTo(ray.points[0].x, ray.points[0].y);
+                for (let i = 1; i < ray.points.length; i++) {
+                    ctx.lineTo(ray.points[i].x, ray.points[i].y);
+                }
+                
+                if (ray.inShadow) {
+                    ctx.strokeStyle = 'rgba(255, 100, 100, 0.12)';
+                    ctx.lineWidth = 0.5;
+                } else if (ray.hitsCore) {
+                    ctx.strokeStyle = `rgba(255, 150, 100, ${0.2 + this.seismicAmplitude * 0.35})`;
+                    ctx.lineWidth = 1 + this.seismicAmplitude * 0.5;
+                } else {
+                    ctx.strokeStyle = `rgba(74, 158, 255, ${0.3 + this.seismicAmplitude * 0.4})`;
+                    ctx.lineWidth = 1 + this.seismicAmplitude * 0.5;
+                }
+                ctx.stroke();
+            }
+        }
+        
+        drawWavefronts() {
+            const ctx = this.ctx;
+            const wavefrontPhase = this.animationTime % 1;
+            
+            for (let w = 0; w < 3; w++) {
+                const phase = (wavefrontPhase + w / 3) % 1;
+                const alpha = 1 - w * 0.3;
+                
+                for (const ray of this.rays) {
+                    if (ray.points.length < 2 || ray.inShadow) continue;
+                    
+                    const pos = this.pointOnRay(ray, phase);
+                    const size = 2.5 + this.seismicAmplitude * 4 - w * 0.8;
+                    
+                    if (size > 0) {
+                        ctx.fillStyle = ray.hitsCore
+                            ? `rgba(255, 180, 120, ${alpha * (0.5 + this.seismicAmplitude * 0.5)})`
+                            : `rgba(100, 180, 255, ${alpha * (0.6 + this.seismicAmplitude * 0.4)})`;
+                        ctx.beginPath();
+                        ctx.arc(pos.x, pos.y, size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+        
+        drawEpicenter() {
+            const ctx = this.ctx;
+            const ex = this.cx + this.R * Math.cos(this.epicenterAngle);
+            const ey = this.cy + this.R * Math.sin(this.epicenterAngle);
+            
+            const wavefrontPhase = this.animationTime % 1;
+            const pulse = 12 + this.seismicAmplitude * 25 + Math.sin(wavefrontPhase * Math.PI * 4) * 5;
+            const grad = ctx.createRadialGradient(ex, ey, 0, ex, ey, pulse * 2);
+            grad.addColorStop(0, `rgba(255, 68, 68, ${0.8 + this.seismicAmplitude * 0.2})`);
+            grad.addColorStop(0.4, 'rgba(255, 50, 50, 0.4)');
+            grad.addColorStop(1, 'transparent');
+            
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(ex, ey, pulse * 2, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#ff4444';
+            ctx.beginPath();
+            for (let i = 0; i < 5; i++) {
+                const a = this.epicenterAngle - Math.PI / 2 + i * Math.PI * 2 / 5;
+                const ox = ex + Math.cos(a) * 7;
+                const oy = ey + Math.sin(a) * 7;
+                const ix = ex + Math.cos(a + Math.PI / 5) * 3;
+                const iy = ey + Math.sin(a + Math.PI / 5) * 3;
+                if (i === 0) ctx.moveTo(ox, oy);
+                else ctx.lineTo(ox, oy);
+                ctx.lineTo(ix, iy);
+            }
+            ctx.closePath();
+            ctx.fill();
+        }
+        
+        drawStation() {
+            const ctx = this.ctx;
+            const sx = this.cx + this.R * Math.cos(this.stationAngle);
+            const sy = this.cy + this.R * Math.sin(this.stationAngle);
+            
+            if (this.seismicAmplitude > 0.05) {
+                const ringSize = 10 + this.seismicAmplitude * 30;
+                ctx.strokeStyle = `rgba(74, 255, 158, ${this.seismicAmplitude * 0.7})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(sx, sy, ringSize, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                ctx.strokeStyle = `rgba(74, 255, 158, ${this.seismicAmplitude * 0.4})`;
+                ctx.beginPath();
+                ctx.arc(sx, sy, ringSize * 0.6, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            
+            ctx.fillStyle = '#4aff9e';
+            ctx.beginPath();
+            const outAngle = this.stationAngle;
+            ctx.moveTo(sx + Math.cos(outAngle) * 8, sy + Math.sin(outAngle) * 8);
+            ctx.lineTo(sx + Math.cos(outAngle + 2.3) * 5, sy + Math.sin(outAngle + 2.3) * 5);
+            ctx.lineTo(sx + Math.cos(outAngle - 2.3) * 5, sy + Math.sin(outAngle - 2.3) * 5);
+            ctx.closePath();
+            ctx.fill();
+            
+            ctx.strokeStyle = '#4aff9e';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx + Math.cos(outAngle - 0.3) * 14, sy + Math.sin(outAngle - 0.3) * 14);
+            ctx.stroke();
+        }
+        
+        drawLabels() {
+            const ctx = this.ctx;
+            const fontSize = Math.max(8, Math.min(9, this.w * 0.015));
+            
+            const ex = this.cx + this.R * Math.cos(this.epicenterAngle);
+            const ey = this.cy + this.R * Math.sin(this.epicenterAngle);
+            ctx.fillStyle = '#ff8888';
+            ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, monospace`;
+            ctx.textAlign = 'center';
+            ctx.fillText('EPICENTER', ex, ey - 25);
+            
+            const sx = this.cx + this.R * Math.cos(this.stationAngle);
+            const sy = this.cy + this.R * Math.sin(this.stationAngle);
+            ctx.fillStyle = '#4aff9e';
+            ctx.fillText('IU.ANMO', sx + 18, sy + 22);
+            
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.75)';
+            ctx.font = `${fontSize - 1}px -apple-system, BlinkMacSystemFont, monospace`;
+            const midAngle = (this.shadowStart + this.shadowEnd) / 2 * Math.PI / 180;
+            
+            for (const side of [1, -1]) {
+                const labelAngle = this.epicenterAngle + side * midAngle;
+                const lx = this.cx + this.R * 1.12 * Math.cos(labelAngle);
+                const ly = this.cy + this.R * 1.12 * Math.sin(labelAngle);
+                
+                ctx.save();
+                ctx.translate(lx, ly);
+                ctx.rotate(labelAngle + (side === 1 ? Math.PI / 2 : -Math.PI / 2));
+                ctx.fillText('SHADOW', 0, 0);
+                ctx.fillText('ZONE', 0, 10);
+                ctx.restore();
+            }
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+            ctx.font = `${fontSize - 1}px -apple-system, BlinkMacSystemFont, monospace`;
+            ctx.textAlign = 'center';
+            ctx.fillText('MANTLE', this.cx, this.cy - this.R * 0.72);
+            
+            ctx.fillStyle = 'rgba(255, 200, 150, 0.45)';
+            ctx.fillText('OUTER CORE', this.cx, this.cy - this.R * 0.33);
+            
+            ctx.fillStyle = 'rgba(255, 220, 180, 0.45)';
+            ctx.fillText('INNER', this.cx, this.cy - 3);
+            ctx.fillText('CORE', this.cx, this.cy + 9);
+        }
+        
+        drawNoteParticles() {
+            for (const particle of this.noteParticles) {
+                particle.draw(this.ctx);
+            }
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SYNTH GRAIN
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    class SynthGrain {
+        constructor(ctx, params) {
+            this.ctx = ctx;
+            this.params = params;
+        }
+        
+        play(dest, startTime) {
+            const { frequency, duration, waveform, pan, amplitude, attack, release, detune, filterFreq, filterQ } = this.params;
+            
+            const osc = this.ctx.createOscillator();
+            osc.type = waveform || 'sine';
+            osc.frequency.value = frequency;
+            osc.detune.value = detune || 0;
+            
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = filterFreq || 4000;
+            filter.Q.value = filterQ || 1;
+            
+            const env = this.ctx.createGain();
+            const att = duration * attack;
+            const rel = duration * release;
+            const sus = Math.max(0, duration - att - rel);
+            
+            env.gain.setValueAtTime(0, startTime);
+            env.gain.linearRampToValueAtTime(amplitude, startTime + att);
+            if (sus > 0) env.gain.setValueAtTime(amplitude, startTime + att + sus);
+            env.gain.linearRampToValueAtTime(0, startTime + duration);
+            
+            const panner = this.ctx.createStereoPanner();
+            panner.pan.value = clamp(pan, -1, 1);
+            
+            osc.connect(filter);
+            filter.connect(env);
+            env.connect(panner);
+            panner.connect(dest);
+            
+            osc.start(startTime);
+            osc.stop(startTime + duration + 0.02);
+            
+            return osc;
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GRANULAR CLOUD
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    class GranularCloud {
+        constructor(ctx, dest, type = 'texture') {
+            this.ctx = ctx;
+            this.destination = dest;
+            this.type = type;
+            this.isActive = false;
+            this.schedulerId = null;
+            
+            this.density = 30;
+            this.grainDuration = 0.05;
+            this.durationSpread = 0.4;
+            this.baseFrequency = 220;
+            this.frequencySpread = 0.5;
+            this.panSpread = 0.8;
+            this.amplitude = 0.12;
+            this.attackRatio = 0.3;
+            this.releaseRatio = 0.5;
+            this.waveform = 'sine';
+            this.filterFreq = 4000;
+            this.filterQ = 1;
+            
+            this.quantizeEnabled = true;
+            this.scale = 'pentatonic';
+            this.rootFreq = 110;
+            
+            this.outputGain = this.ctx.createGain();
+            this.outputGain.gain.value = 0.7;
+            this.outputGain.connect(this.destination);
+            
+            this.grainCount = 0;
+        }
+        
+        setParams(p) { Object.assign(this, p); }
+        
+        start() {
+            this.isActive = true;
+            this.scheduleGrain();
+        }
+        
+        stop() {
+            this.isActive = false;
+            if (this.schedulerId) {
+                clearTimeout(this.schedulerId);
+                this.schedulerId = null;
+            }
+        }
+        
+        scheduleGrain() {
+            if (!this.isActive) return;
+            
+            const now = this.ctx.currentTime;
+            let freq = this.baseFrequency * Math.pow(2, (Math.random() - 0.5) * this.frequencySpread * 2);
+            
+            if (this.quantizeEnabled) {
+                freq = quantizeToScale(freq, this.scale, this.rootFreq);
+            }
+            
+            const dur = this.grainDuration * (1 + (Math.random() - 0.5) * this.durationSpread);
+            
+            const params = {
+                frequency: freq,
+                duration: Math.max(0.01, dur),
+                waveform: this.waveform,
+                pan: (Math.random() - 0.5) * 2 * this.panSpread,
+                amplitude: this.amplitude * (0.7 + Math.random() * 0.3),
+                attack: this.attackRatio,
+                release: this.releaseRatio,
+                detune: (Math.random() - 0.5) * 25,
+                filterFreq: this.filterFreq,
+                filterQ: this.filterQ
+            };
+            
+            new SynthGrain(this.ctx, params).play(this.outputGain, now);
+            this.grainCount++;
+            
+            const interval = 1000 / Math.max(1, this.density);
+            const jitter = interval * 0.25 * (Math.random() - 0.5);
+            this.schedulerId = setTimeout(() => this.scheduleGrain(), Math.max(8, interval + jitter));
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // RHYTHM CLOUD
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    class RhythmCloud extends GranularCloud {
+        constructor(ctx, dest, zeroCrossings) {
+            super(ctx, dest, 'rhythm');
+            this.zeroCrossings = zeroCrossings || [];
+            this.crossingIndex = 0;
+            this.triggerProbability = 0.6;
+            this.waveform = 'triangle';
+            this.attackRatio = 0.05;
+            this.releaseRatio = 0.7;
+        }
+        
+        scheduleGrain() {
+            if (!this.isActive) return;
+            
+            this.crossingIndex = (this.crossingIndex + 1) % Math.max(1, this.zeroCrossings.length);
+            
+            if (Math.random() < this.triggerProbability) {
+                const now = this.ctx.currentTime;
+                let freq = this.baseFrequency;
+                if (this.quantizeEnabled) freq = quantizeToScale(freq, this.scale, this.rootFreq);
+                
+                const params = {
+                    frequency: freq,
+                    duration: this.grainDuration,
+                    waveform: this.waveform,
+                    pan: (Math.random() - 0.5) * 2 * this.panSpread,
+                    amplitude: this.amplitude,
+                    attack: this.attackRatio,
+                    release: this.releaseRatio,
+                    detune: 0,
+                    filterFreq: this.filterFreq,
+                    filterQ: this.filterQ
+                };
+                
+                new SynthGrain(this.ctx, params).play(this.outputGain, now);
+                this.grainCount++;
+            }
+            
+            this.schedulerId = setTimeout(() => this.scheduleGrain(), 1000 / Math.max(1, this.density));
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GRANULAR ENGINE
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    class GranularEngine {
+        constructor(ctx, dest) {
+            this.ctx = ctx;
+            this.destination = dest;
+            this.seismicData = [];
+            this.zeroCrossings = [];
+            this.playhead = 0;
+            this.isActive = false;
+            this.isFrozen = false;
+            this.stretchFactor = 1.0;
+            
+            this.filter = this.ctx.createBiquadFilter();
+            this.filter.type = 'lowpass';
+            this.filter.frequency.value = 5000;
+            this.filter.Q.value = 1.5;
+            
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.value = 0;
+            
+            this.filter.connect(this.masterGain);
+            this.masterGain.connect(this.destination);
+            
+            this.textureCloud = null;
+            this.toneCloud = null;
+            this.rhythmCloud = null;
+            
+            this.animFrameId = null;
+        }
+        
+        loadSeismicData(arr) {
+            this.seismicData = Array.from(arr);
+            this.zeroCrossings = this.detectZeroCrossings(this.seismicData);
+            console.log(`[Engine] Loaded ${this.seismicData.length} samples, ${this.zeroCrossings.length} zero-crossings`);
+        }
+        
+        detectZeroCrossings(data) {
+            const crossings = [];
+            for (let i = 1; i < data.length; i++) {
+                if (data[i-1] * data[i] < 0) crossings.push(i / data.length);
+            }
+            return crossings;
+        }
+        
+        initializeClouds(rootFreq, scale) {
+            this.textureCloud = new GranularCloud(this.ctx, this.filter, 'texture');
+            this.textureCloud.setParams({
+                density: 45, grainDuration: 0.035, durationSpread: 0.5,
+                baseFrequency: rootFreq * 4, frequencySpread: 1.2, panSpread: 1.0,
+                amplitude: 0.08, attackRatio: 0.1, releaseRatio: 0.6,
+                waveform: 'sine', filterFreq: 6000, filterQ: 1, scale, rootFreq
+            });
+            
+            this.toneCloud = new GranularCloud(this.ctx, this.filter, 'tone');
+            this.toneCloud.setParams({
+                density: 6, grainDuration: 0.3, durationSpread: 0.3,
+                baseFrequency: rootFreq, frequencySpread: 0.4, panSpread: 0.35,
+                amplitude: 0.14, attackRatio: 0.4, releaseRatio: 0.45,
+                waveform: 'triangle', filterFreq: 3000, filterQ: 2, scale, rootFreq
+            });
+            
+            this.rhythmCloud = new RhythmCloud(this.ctx, this.filter, this.zeroCrossings);
+            this.rhythmCloud.setParams({
+                density: 14, grainDuration: 0.055, baseFrequency: rootFreq * 2,
+                frequencySpread: 0.35, panSpread: 0.7, amplitude: 0.1,
+                triggerProbability: 0.55, waveform: 'sawtooth',
+                filterFreq: 4000, filterQ: 3, scale, rootFreq
+            });
+        }
+        
+        start(rootFreq, scale, layerStates) {
+            this.isActive = true;
+            this.playhead = 0;
+            this.initializeClouds(rootFreq, scale);
+            
+            if (layerStates.texture) this.textureCloud.start();
+            if (layerStates.tone) this.toneCloud.start();
+            if (layerStates.rhythm) this.rhythmCloud.start();
+            
+            this.masterGain.gain.setTargetAtTime(0.95, this.ctx.currentTime, 1.5);
+            this.modulateFromSeismic();
+        }
+        
+        modulateFromSeismic() {
+            if (!this.isActive) return;
+            
+            const idx = Math.floor(this.playhead * this.seismicData.length);
+            const sample = this.seismicData[idx] || 0;
+            const deriv = this.calculateDerivative(idx);
+            const rms = this.calculateRMS(idx);
+            const now = this.ctx.currentTime;
+            
+            const amp = Math.abs(sample);
+            
+            const targetFilter = 2000 + amp * 6000;
+            this.filter.frequency.setTargetAtTime(clamp(targetFilter, 1000, 10000), now, 0.025);
+            
+            if (this.textureCloud?.isActive) {
+                this.textureCloud.density = 35 + amp * 60;
+                this.textureCloud.amplitude = 0.06 + amp * 0.08;
+                this.textureCloud.frequencySpread = 0.4 + deriv * 15;
+                this.textureCloud.panSpread = 0.5 + deriv * 8;
+                this.textureCloud.baseFrequency = this.textureCloud.rootFreq * 4 * (1 + sample * 0.25);
+            }
+            
+            if (this.toneCloud?.isActive) {
+                this.toneCloud.density = 5 + rms * 10;
+                this.toneCloud.frequencySpread = 0.2 + deriv * 8;
+                this.toneCloud.amplitude = 0.1 + rms * 0.08;
+            }
+            
+            if (this.rhythmCloud?.isActive) {
+                this.rhythmCloud.triggerProbability = 0.35 + rms * 0.5;
+                this.rhythmCloud.baseFrequency = this.rhythmCloud.rootFreq * 2 * (1 + rms * 0.4);
+                this.rhythmCloud.amplitude = 0.08 + amp * 0.08;
+            }
+            
+            if (!this.isFrozen) {
+                this.playhead += CONFIG.playbackSpeed / this.stretchFactor;
+                if (this.playhead >= 1) this.playhead = 0;
+            }
+            
+            this.animFrameId = requestAnimationFrame(() => this.modulateFromSeismic());
+        }
+        
+        calculateDerivative(idx, win = 5) {
+            if (idx < win || idx >= this.seismicData.length - win) return 0;
+            let sum = 0;
+            for (let i = 1; i <= win; i++) {
+                sum += Math.abs(this.seismicData[idx + i] - this.seismicData[idx - i]);
+            }
+            return sum / (2 * win);
+        }
+        
+        calculateRMS(idx, win = 50) {
+            const start = Math.max(0, idx - win);
+            const end = Math.min(this.seismicData.length, idx + win);
+            let sum = 0;
+            for (let i = start; i < end; i++) sum += this.seismicData[i] ** 2;
+            return Math.sqrt(sum / (end - start));
+        }
+        
+        freeze() {
+            this.isFrozen = true;
+            if (this.textureCloud) {
+                this.textureCloud.density = 90;
+                this.textureCloud.grainDuration = 0.15;
+                this.textureCloud.frequencySpread = 0.15;
+            }
+            if (this.toneCloud) {
+                this.toneCloud.density = 14;
+                this.toneCloud.grainDuration = 0.5;
+            }
+        }
+        
+        unfreeze() {
+            this.isFrozen = false;
+            if (this.textureCloud) {
+                this.textureCloud.density = 45;
+                this.textureCloud.grainDuration = 0.035;
+                this.textureCloud.frequencySpread = 1.2;
+            }
+            if (this.toneCloud) {
+                this.toneCloud.density = 6;
+                this.toneCloud.grainDuration = 0.3;
+            }
+        }
+        
+        setStretch(f) { this.stretchFactor = f; }
+        
+        setScale(s) {
+            [this.textureCloud, this.toneCloud, this.rhythmCloud].forEach(c => {
+                if (c) c.scale = s;
+            });
+        }
+        
+        setRootFreq(f) {
+            if (this.textureCloud) { this.textureCloud.rootFreq = f; this.textureCloud.baseFrequency = f * 4; }
+            if (this.toneCloud) { this.toneCloud.rootFreq = f; this.toneCloud.baseFrequency = f; }
+            if (this.rhythmCloud) { this.rhythmCloud.rootFreq = f; this.rhythmCloud.baseFrequency = f * 2; }
+        }
+        
+        setLayerActive(layer, active) {
+            const cloud = this[layer + 'Cloud'];
+            if (cloud) {
+                if (active && !cloud.isActive) cloud.start();
+                else if (!active && cloud.isActive) cloud.stop();
+            }
+        }
+        
+        getStats() {
+            return {
+                texture: this.textureCloud?.grainCount || 0,
+                tone: this.toneCloud?.grainCount || 0,
+                rhythm: this.rhythmCloud?.grainCount || 0,
+                filterFreq: Math.round(this.filter.frequency.value)
+            };
+        }
+        
+        cleanup() {
+            this.isActive = false;
+            if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
+            [this.textureCloud, this.toneCloud, this.rhythmCloud].forEach(c => c?.stop());
+            try { this.filter.disconnect(); this.masterGain.disconnect(); } catch(e) {}
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // GLOBAL STATE
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    let audioCtx = null;
+    let masterGain, compressor, reverb, reverbWet, delay, delayFeedback;
+    let seismicData = [];
+    let isPlaying = false;
+    let isFrozen = false;
+    let quakeInfo = null;
+    let granularEngine = null;
+    let shadowViz = null;
+    let layerStates = { texture: true, tone: true, rhythm: true };
+    
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const freezeBtn = document.getElementById('freezeBtn');
+    const statusEl = document.getElementById('status');
+    const scaleSelect = document.getElementById('scaleSelect');
+    const rootSelect = document.getElementById('rootSelect');
+    const stretchSlider = document.getElementById('stretchSlider');
+    const reverbSlider = document.getElementById('reverbSlider');
+    const textureEl = document.getElementById('textureValue');
+    const toneEl = document.getElementById('toneValue');
+    const rhythmEl = document.getElementById('rhythmValue');
+    const filterEl = document.getElementById('filterValue');
+    
+    let shadowCanvas;
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // SEISMIC DATA
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    function parseMiniSEED(buffer) {
+        try {
+            const view = new DataView(buffer);
+            if (buffer.byteLength < 64) throw new Error("Buffer too small");
+            const numSamples = view.getInt16(46, false);
+            const dataOffset = 64;
+            if (numSamples <= 0 || buffer.byteLength < dataOffset + numSamples * 4) throw new Error("Invalid sample count");
+            const rawData = new Int32Array(buffer.slice(dataOffset, dataOffset + numSamples * 4));
+            const maxVal = rawData.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+            if (maxVal === 0) return new Float32Array(rawData.length);
+            const normalized = new Float32Array(rawData.length);
+            for (let i = 0; i < rawData.length; i++) normalized[i] = rawData[i] / maxVal;
+            return normalized;
+        } catch (e) {
+            console.error("MiniSEED Error:", e);
+            const fb = new Float32Array(8192);
+            for (let i = 0; i < fb.length; i++) {
+                const p = Math.sin(i * 0.15) * Math.exp(-i / 1500);
+                const s = i > 2000 ? Math.sin((i - 2000) * 0.08) * Math.exp(-(i - 2000) / 3000) * 1.5 : 0;
+                const surf = i > 4000 ? (Math.sin((i - 4000) * 0.03) + Math.sin((i - 4000) * 0.05) * 0.5) * Math.exp(-(i - 4000) / 5000) * 0.8 : 0;
+                fb[i] = p + s + surf + (Math.random() - 0.5) * 0.05;
+            }
+            const maxV = fb.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+            if (maxV > 0) for (let i = 0; i < fb.length; i++) fb[i] /= maxV;
+            return fb;
+        }
+    }
+    
+    async function fetchLatestEvent() {
+        const end = new Date().toISOString();
+        const start = new Date(Date.now() - CONFIG.fetchDays * 86400000).toISOString();
+        const url = `https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime=${start}&endtime=${end}&minmagnitude=${CONFIG.minMagnitude}&orderby=time`;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`USGS failed: ${res.status}`);
+            const data = await res.json();
+            if (!data.features?.length) throw new Error("No events found");
+            return data.features[0];
+        } catch (e) {
+            console.error(e);
+            setStatus(`Error: ${e.message}`, true);
+            return null;
+        }
+    }
+    
+    async function fetchMiniSEED(eventTime) {
+        const start = new Date(new Date(eventTime).getTime() - 5000).toISOString();
+        const end = new Date(new Date(start).getTime() + CONFIG.seismicDurationS * 1000).toISOString();
+        const { net, sta, loc, cha } = CONFIG.station;
+        const url = `https://service.earthscope.org/fdsnws/dataselect/1/query?net=${net}&sta=${sta}&loc=${loc}&cha=${cha}&starttime=${start}&endtime=${end}&format=miniseed`;
+        try {
+            const res = await fetch(url);
+            if (!res.ok || res.status === 204) throw new Error("EarthScope fetch failed");
+            return await res.arrayBuffer();
+        } catch (e) {
+            console.error(e);
+            setStatus(`Error: ${e.message}`, true);
+            return null;
+        }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // AUDIO SETUP
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    async function initAudio() {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: CONFIG.sampleRate });
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        
+        compressor = audioCtx.createDynamicsCompressor();
+        compressor.threshold.value = -12;
+        compressor.ratio.value = 3;
+        compressor.attack.value = 0.005;
+        compressor.release.value = 0.2;
+        
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0;
+        
+        compressor.connect(masterGain);
+        masterGain.connect(audioCtx.destination);
+        
+        await createReverb();
+        createDelay();
+    }
+    
+    async function createReverb() {
+        const len = 3.5 * audioCtx.sampleRate;
+        const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+        for (let ch = 0; ch < 2; ch++) {
+            const data = buf.getChannelData(ch);
+            for (let i = 0; i < len; i++) {
+                const decay = Math.pow(1 - i / len, 2.3);
+                const early = i < 2000 ? Math.sin(i * 0.1) * 0.25 : 0;
+                data[i] = ((Math.random() * 2 - 1) * decay + early * decay) * 0.7;
+            }
+        }
+        reverb = audioCtx.createConvolver();
+        reverb.buffer = buf;
+        reverbWet = audioCtx.createGain();
+        reverbWet.gain.value = 0.45;
+        reverb.connect(reverbWet);
+        reverbWet.connect(masterGain);
+    }
+    
+    function createDelay() {
+        delay = audioCtx.createDelay(2);
+        delay.delayTime.value = 0.375;
+        delayFeedback = audioCtx.createGain();
+        delayFeedback.gain.value = 0.38;
+        const delayWet = audioCtx.createGain();
+        delayWet.gain.value = 0.28;
+        const delayFilter = audioCtx.createBiquadFilter();
+        delayFilter.type = 'lowpass';
+        delayFilter.frequency.value = 2200;
+        delay.connect(delayFilter);
+        delayFilter.connect(delayFeedback);
+        delayFeedback.connect(delay);
+        delayFilter.connect(delayWet);
+        delayWet.connect(masterGain);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // VISUALIZATION
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    function initCanvases() {
+        shadowCanvas = document.getElementById('shadowCanvas');
+        shadowViz = new ShadowZoneVisualizer(shadowCanvas);
+        window.addEventListener('resize', () => shadowViz?.resize());
+        window.addEventListener('orientationchange', () => setTimeout(() => shadowViz?.resize(), 100));
+    }
+    
+    function updateVisualization() {
+        if (!isPlaying) return;
+        
+        const playhead = granularEngine?.playhead || 0;
+        const idx = Math.floor(playhead * seismicData.length);
+        const amp = Math.abs(seismicData[idx] || 0);
+        
+        shadowViz?.update(amp);
+        shadowViz?.draw();
+        
+        if (granularEngine) {
+            const stats = granularEngine.getStats();
+            textureEl.textContent = granularEngine.textureCloud?.isActive ? Math.round(granularEngine.textureCloud.density) : '—';
+            toneEl.textContent = granularEngine.toneCloud?.isActive ? Math.round(granularEngine.toneCloud.density) : '—';
+            rhythmEl.textContent = granularEngine.rhythmCloud?.isActive ? Math.round(granularEngine.rhythmCloud.triggerProbability * 100) + '%' : '—';
+            filterEl.textContent = stats.filterFreq + 'Hz';
+        }
+        
+        requestAnimationFrame(updateVisualization);
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // CONTROL FLOW
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    function setStatus(msg, isError = false) {
+        statusEl.innerHTML = `<span style="color: ${isError ? '#ff5555' : 'inherit'}">${msg}</span>`;
+    }
+    
+    function formatTime(ds) { return new Date(ds).toLocaleString(); }
+    
+    async function start() {
+        if (isPlaying) return;
+        startBtn.disabled = true;
+        document.body.classList.add('loading');
+        
+        try {
+            setStatus('Initializing audio...');
+            await initAudio();
+            
+            setStatus('Fetching earthquake data...');
+            const event = await fetchLatestEvent();
+            if (!event) { stop(); return; }
+            
+            quakeInfo = {
+                place: event.properties.place || 'Unknown',
+                mag: event.properties.mag || 0,
+                depth: event.geometry.coordinates[2] || 0,
+                time: new Date(event.properties.time).toISOString(),
+                url: `https://earthquake.usgs.gov/earthquakes/eventpage/${event.id}/executive`,
+                lon: event.geometry.coordinates[0],
+                lat: event.geometry.coordinates[1]
+            };
+            
+            setStatus(`Found M${quakeInfo.mag.toFixed(1)} · Fetching waveform...`);
+            
+            const miniSEED = await fetchMiniSEED(quakeInfo.time);
+            if (!miniSEED) { stop(); return; }
+            
+            seismicData = Array.from(parseMiniSEED(miniSEED));
+            
+            initCanvases();
+            shadowViz.setEpicenter(quakeInfo.lon, quakeInfo.lat);
+            
+            const df = Math.min(1, quakeInfo.depth / 600);
+            reverbWet.gain.setTargetAtTime(0.35 + df * 0.35, audioCtx.currentTime, 0.5);
+            delay.delayTime.setTargetAtTime(0.3 + df * 0.35, audioCtx.currentTime, 0.5);
+            delayFeedback.gain.setTargetAtTime(0.35 + df * 0.25, audioCtx.currentTime, 0.5);
+            
+            const rootFreq = parseFloat(rootSelect.value);
+            const scale = scaleSelect.value;
+            
+            granularEngine = new GranularEngine(audioCtx, compressor);
+            granularEngine.loadSeismicData(seismicData);
+            granularEngine.masterGain.connect(reverb);
+            granularEngine.masterGain.connect(delay);
+            granularEngine.start(rootFreq, scale, layerStates);
+            
+            isPlaying = true;
+            masterGain.gain.setTargetAtTime(0.85, audioCtx.currentTime, 2);
+            
+            stopBtn.disabled = false;
+            freezeBtn.disabled = false;
+            document.body.classList.remove('loading');
+            
+            updateVisualization();
+            
+            setStatus(`
+                <span class="magnitude">M${quakeInfo.mag.toFixed(1)}</span> · 
+                <span class="location">${quakeInfo.place}</span><br>
+                Depth: ${quakeInfo.depth.toFixed(0)} km · ${formatTime(quakeInfo.time)}<br>
+                <a href="${quakeInfo.url}" target="_blank">View on USGS</a>
+            `);
+            
+        } catch (e) {
+            console.error(e);
+            setStatus(`Error: ${e.message}`, true);
+            stop();
+        }
+    }
+    
+    function stop() {
+        isPlaying = false;
+        isFrozen = false;
+        shadowViz?.setMuzakMode(false);
+        granularEngine?.cleanup();
+        granularEngine = null;
+        
+        if (audioCtx) {
+            masterGain?.gain.setTargetAtTime(0, audioCtx.currentTime, 0.5);
+            setTimeout(() => { audioCtx?.close(); audioCtx = null; }, 1000);
+        }
+        
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        freezeBtn.disabled = true;
+        freezeBtn.classList.remove('frozen');
+        freezeBtn.textContent = 'Muzak';
+        document.body.classList.remove('loading');
+        
+        setStatus('Sonification ended · Press Begin to restart');
+        textureEl.textContent = '—';
+        toneEl.textContent = '—';
+        rhythmEl.textContent = '—';
+        filterEl.textContent = '—';
+    }
+    
+    function toggleFreeze() {
+        if (!granularEngine) return;
+        isFrozen = !isFrozen;
+        if (isFrozen) {
+            granularEngine.freeze();
+            shadowViz?.setMuzakMode(true);
+            freezeBtn.classList.add('frozen');
+            freezeBtn.textContent = 'Unmuzak';
+        } else {
+            granularEngine.unfreeze();
+            shadowViz?.setMuzakMode(false);
+            freezeBtn.classList.remove('frozen');
+            freezeBtn.textContent = 'Muzak';
+        }
+    }
+    
+    function toggleLayer(layer) {
+        layerStates[layer] = !layerStates[layer];
+        const btn = document.getElementById('toggle' + layer.charAt(0).toUpperCase() + layer.slice(1));
+        btn.classList.toggle('active', layerStates[layer]);
+        granularEngine?.setLayerActive(layer, layerStates[layer]);
+    }
+    
+    // Event listeners
+    startBtn.onclick = start;
+    stopBtn.onclick = stop;
+    freezeBtn.onclick = toggleFreeze;
+    document.getElementById('toggleTexture').onclick = () => toggleLayer('texture');
+    document.getElementById('toggleTone').onclick = () => toggleLayer('tone');
+    document.getElementById('toggleRhythm').onclick = () => toggleLayer('rhythm');
+    scaleSelect.onchange = function() { granularEngine?.setScale(this.value); };
+    rootSelect.onchange = function() { granularEngine?.setRootFreq(parseFloat(this.value)); };
+    stretchSlider.oninput = function() {
+        document.getElementById('stretchValue').textContent = parseFloat(this.value).toFixed(2) + '×';
+        granularEngine?.setStretch(parseFloat(this.value));
+    };
+    reverbSlider.oninput = function() {
+        document.getElementById('reverbValue').textContent = this.value + '%';
+        if (reverbWet && audioCtx) reverbWet.gain.setTargetAtTime(parseInt(this.value) / 100 * 0.7, audioCtx.currentTime, 0.1);
+    };
+    
+    // iOS audio unlock
+    document.addEventListener('touchstart', function unlockAudio() {
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        document.removeEventListener('touchstart', unlockAudio);
+    }, { once: true });
+    
+    // Initial setup
+    initCanvases();
+    shadowViz?.draw();
+    
+    console.log('[SOS] SHADOWZONE v3 - Continuous animation + MUZAK note indicators');
+    </script>
+</body>
+</html>
