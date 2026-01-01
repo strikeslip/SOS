@@ -1,7 +1,7 @@
 <!--
-[SOS - Sounds Of Seismic] - SHADOWZONE Edition v3
+[SOS - Sounds Of Seismic] - SHADOWZONE SHADOWS
 https://sos.allshookup.org/
-Copyright (c) [2025] [SHOOK aka D.V.R.]
+Copyright (c) [2026] [SHOOK aka D.V.R.]
 
 Seismic Waveform Electronica
 - Three-layer granular synthesis (Texture/Tone/Rhythm)
@@ -9,6 +9,7 @@ Seismic Waveform Electronica
 - Shadow zone visualization with P-wave ray tracing
 - MUZAK mode with floating note status indicator
 - Mobile responsive (iOS/Android)
+- https://github.com/strikeslip/Complexity/blob/main/constructs/ShadowZones/SOS-ShadowZone-Analysis.md
 
 SOS is free software: MIT License (https://opensource.org/license/mit)
 -->
@@ -16,7 +17,7 @@ SOS is free software: MIT License (https://opensource.org/license/mit)
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=5.0, user-scalable=yes">
     <meta charset="UTF-8">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
@@ -858,16 +859,11 @@ SOS is free software: MIT License (https://opensource.org/license/mit)
             const ctx = this.ctx;
             const fontSize = Math.max(8, Math.min(9, this.w * 0.015));
             
-            const ex = this.cx + this.R * Math.cos(this.epicenterAngle);
-            const ey = this.cy + this.R * Math.sin(this.epicenterAngle);
-            ctx.fillStyle = '#ff8888';
-            ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, monospace`;
-            ctx.textAlign = 'center';
-            ctx.fillText('EPICENTER', ex, ey - 25);
-            
             const sx = this.cx + this.R * Math.cos(this.stationAngle);
             const sy = this.cy + this.R * Math.sin(this.stationAngle);
             ctx.fillStyle = '#4aff9e';
+            ctx.font = `${fontSize}px -apple-system, BlinkMacSystemFont, monospace`;
+            ctx.textAlign = 'center';
             ctx.fillText('IU.ANMO', sx + 18, sy + 22);
             
             ctx.fillStyle = 'rgba(255, 100, 100, 0.75)';
